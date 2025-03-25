@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Triangle": {
+      "commandName": "Project",
+      "workingDirectory": "$(ProjectDir)/Properties"
+    }
+  }
+}
