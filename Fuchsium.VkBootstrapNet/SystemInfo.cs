@@ -40,7 +40,10 @@ public unsafe struct SystemInfo {
 		var availableLayersRet = Detail.GetVector(out VkLayerProperties[] layerProperties, (p1, p2) => Vk.EnumerateInstanceLayerProperties((uint*)p1, (VkLayerProperties*)p2));
 		AvailableLayers = availableLayersRet == VkResult.Success ? layerProperties : [];
 
-		ValidationLayersAvailable = AvailableLayers.Any(x => Encoding.UTF8.GetString(x.layerName) == Detail.ValidationLayerName);
+		ValidationLayersAvailable = AvailableLayers.Any(x => {
+			string name = Encoding.UTF8.GetString(x.layerName);
+			return name.Substring(0, name.IndexOf('\0')) == Detail.ValidationLayerName;
+		});
 
 		var availableExtensionsRet = Detail.GetVector(out VkExtensionProperties[] extensionProperties, (p1, p2) => Vk.EnumerateInstanceExtensionProperties(null, (uint*)p1, (VkExtensionProperties*)p2));
 		AvailableExtensions = availableExtensionsRet == VkResult.Success ? extensionProperties.ToList() : [];
