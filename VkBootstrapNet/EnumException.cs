@@ -1,4 +1,4 @@
-﻿namespace Fuchsium.VkBootstrapNet;
+﻿namespace VkBootstrapNet;
 
 public abstract class EnumException<T> : Exception {
 	protected abstract string DefaultMessage { get; }

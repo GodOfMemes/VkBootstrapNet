@@ -1,8 +1,8 @@
 ﻿using System.Diagnostics;
 using DotNext;
-using OpenTK.Graphics.Vulkan;
+using Vortice.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 public unsafe ref struct SwapchainBuilder {
 	public const int SingleBuffering = 1;
@@ -35,25 +35,25 @@ public unsafe ref struct SwapchainBuilder {
 		_info.GraphicsQueueIndex = graphics.Value;
 		_info.PresentQueueIndex = present.Value;
 	}
-	public unsafe SwapchainBuilder(VkPhysicalDevice physicalDevice, in VkDevice device, in VkSurfaceKHR surface, uint graphicsQueueIndex, uint presentQueueIndex) {
+	/*public unsafe SwapchainBuilder(VkPhysicalDevice physicalDevice, in VkDevice device, in VkSurfaceKHR surface, uint graphicsQueueIndex, uint presentQueueIndex) {
 		_info.PhysicalDevice = physicalDevice;
 		_info.Device = device;
 		_info.Surface = surface;
 		_info.GraphicsQueueIndex = graphicsQueueIndex;
 		_info.PresentQueueIndex = presentQueueIndex;
 		if(graphicsQueueIndex == uint.MaxValue || presentQueueIndex == uint.MaxValue) {
-			var queueFamilies = Detail.GetVectorNoError<VkQueueFamilyProperties>((p1, p2) => Vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, (uint*)p1, (VkQueueFamilyProperties*)p2));
+			var queueFamilies = Detail.GetVectorNoError<VkQueueFamilyProperties>((p1, p2) => vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, (uint*)p1, (VkQueueFamilyProperties*)p2));
 			if(graphicsQueueIndex == uint.MaxValue) {
-				_info.GraphicsQueueIndex = Detail.GetFirstQueueIndex(queueFamilies, VkQueueFlagBits.QueueGraphicsBit);
+				_info.GraphicsQueueIndex = Detail.GetFirstQueueIndex(queueFamilies, VkQueueFlags.Graphics);
 			}
 			if(presentQueueIndex == uint.MaxValue) {
 				_info.PresentQueueIndex = Detail.GetPresentQueueIndex(physicalDevice, surface, queueFamilies);
 			}
 		}
-	}
+	}*/
 
 	public Result<Swapchain> Build() {
-		if(_info.Surface == default) {
+		if(_info.Surface.IsNull) {
 			return Result.FromException<Swapchain>(new SwapchainException(SwapchainError.SurfaceHandleNotProvided));
 		}
 
@@ -66,7 +66,7 @@ public unsafe ref struct SwapchainBuilder {
 			AddDesiredPresentModes(desiredPresentModes);
 		}
 
-		var surfaceSupportRet = Detail.QuerySurfaceSupportDetails(_info.PhysicalDevice, _info.Surface);
+		var surfaceSupportRet = Detail.QuerySurfaceSupportDetails(_info.Device.Instance,_info.PhysicalDevice, _info.Surface);
 		if(!surfaceSupportRet.IsSuccessful) {
 			return Result.FromException<Swapchain>(new SwapchainException(SwapchainError.FailedQuerySurfaceSupportDetails, surfaceSupportRet.Error!.InnerException));
 		}
@@ -108,17 +108,17 @@ public unsafe ref struct SwapchainBuilder {
 		VkPresentModeKHR presentMode = Detail.FindPresentMode(surfaceSupport.PresentModes, desiredPresentModes.ToArray());
 
 		bool IsUnextendedPresentMode(VkPresentModeKHR presentMode) {
-			return presentMode is VkPresentModeKHR.PresentModeImmediateKhr
-				or VkPresentModeKHR.PresentModeMailboxKhr
-				or VkPresentModeKHR.PresentModeFifoKhr
-				or VkPresentModeKHR.PresentModeFifoRelaxedKhr;
+			return presentMode is VkPresentModeKHR.Immediate
+				or VkPresentModeKHR.Mailbox
+				or VkPresentModeKHR.Fifo
+				or VkPresentModeKHR.FifoRelaxed;
 		}
 
 		if(IsUnextendedPresentMode(presentMode) && (_info.ImageUsageFlags & surfaceSupport.Capabilities.supportedUsageFlags) != _info.ImageUsageFlags) {
 			return Result.FromException<Swapchain>(new SwapchainException(SwapchainError.RequiredUsageNotSupported));
 		}
 
-		VkSurfaceTransformFlagBitsKHR preTransform = _info.PreTransform;
+		VkSurfaceTransformFlagsKHR preTransform = _info.PreTransform;
 		if(_info.PreTransform == 0) {
 			preTransform = surfaceSupport.Capabilities.currentTransform;
 		}
@@ -136,21 +136,21 @@ public unsafe ref struct SwapchainBuilder {
 		swapchainCreateInfo.imageUsage = info.ImageUsageFlags;
 
 		if(info.GraphicsQueueIndex != info.PresentQueueIndex) {
-			swapchainCreateInfo.imageSharingMode = VkSharingMode.SharingModeConcurrent;
+			swapchainCreateInfo.imageSharingMode = VkSharingMode.Concurrent;
 			swapchainCreateInfo.queueFamilyIndexCount = 2;
 			swapchainCreateInfo.pQueueFamilyIndices = queueFamilyIndices;
 		} else {
-			swapchainCreateInfo.imageSharingMode = VkSharingMode.SharingModeExclusive;
+			swapchainCreateInfo.imageSharingMode = VkSharingMode.Exclusive;
 		}
 
 		swapchainCreateInfo.preTransform = preTransform;
 		swapchainCreateInfo.compositeAlpha = info.CompositeAlpha;
 		swapchainCreateInfo.presentMode = presentMode;
-		swapchainCreateInfo.clipped = info.Clipped ? 1 : 0;
+		swapchainCreateInfo.clipped = info.Clipped;
 		swapchainCreateInfo.oldSwapchain = info.OldSwapchain;
 
 		Swapchain swapchain = new();
-		var res = CreateSwapchain(ref swapchainCreateInfo, info, ref swapchain.VkSwapchain);
+		var res = CreateSwapchain(info.Device, ref swapchainCreateInfo, info, ref swapchain.VkSwapchain);
 
 		if(res != VkResult.Success) {
 			return Result.FromException<Swapchain>(new SwapchainException(SwapchainError.FailedCreateSwapchain, new VkException(res)));
@@ -172,10 +172,10 @@ public unsafe ref struct SwapchainBuilder {
 		return swapchain;
 	}
 
-	private static VkResult CreateSwapchain(ref VkSwapchainCreateInfoKHR swapchainCreateInfo, SwapchainInfo info, ref VkSwapchainKHR swapchain) {
+	private static VkResult CreateSwapchain(VkDeviceApi deviceApi, ref VkSwapchainCreateInfoKHR swapchainCreateInfo, SwapchainInfo info, ref VkSwapchainKHR swapchain) {
 		fixed(VkSwapchainCreateInfoKHR* pSwapchainCreateInfo = &swapchainCreateInfo) {
 			fixed(VkSwapchainKHR* pSwapchain = &swapchain) {
-				return Vk.CreateSwapchainKHR(info.Device, pSwapchainCreateInfo, info.AllocationCallbacks, pSwapchain);
+				return deviceApi.vkCreateSwapchainKHR(info.Device, pSwapchainCreateInfo, info.AllocationCallbacks, pSwapchain);
 			}
 		}
 	}
@@ -223,16 +223,16 @@ public unsafe ref struct SwapchainBuilder {
 		return ref this;
 	}
 
-	public ref SwapchainBuilder SetImageUsageFlags(VkImageUsageFlagBits usageFlags) {
+	public ref SwapchainBuilder SetImageUsageFlags(VkImageUsageFlags usageFlags) {
 		_info.ImageUsageFlags = usageFlags;
 		return ref this;
 	}
-	public ref SwapchainBuilder AddImageUsageFlags(VkImageUsageFlagBits usageFlags) {
+	public ref SwapchainBuilder AddImageUsageFlags(VkImageUsageFlags usageFlags) {
 		_info.ImageUsageFlags |= usageFlags;
 		return ref this;
 	}
 	public ref SwapchainBuilder UseDefaultImageUseFlags() {
-		_info.ImageUsageFlags = VkImageUsageFlagBits.ImageUsageColorAttachmentBit;
+		_info.ImageUsageFlags = VkImageUsageFlags.ColorAttachment;
 		return ref this;
 	}
 
@@ -256,15 +256,15 @@ public unsafe ref struct SwapchainBuilder {
 		return ref this;
 	}
 
-	public ref SwapchainBuilder SetCreateFlags(VkSwapchainCreateFlagBitsKHR createFlags) {
+	public ref SwapchainBuilder SetCreateFlags(VkSwapchainCreateFlagsKHR createFlags) {
 		_info.CreateFlags = createFlags;
 		return ref this;
 	}
-	public ref SwapchainBuilder SetPreTransformFlags(VkSurfaceTransformFlagBitsKHR preTransformFlags) {
+	public ref SwapchainBuilder SetPreTransformFlags(VkSurfaceTransformFlagsKHR preTransformFlags) {
 		_info.PreTransform = preTransformFlags;
 		return ref this;
 	}
-	public ref SwapchainBuilder SetCompositeAlphaFlags(VkCompositeAlphaFlagBitsKHR compositeAlphaFlags) {
+	public ref SwapchainBuilder SetCompositeAlphaFlags(VkCompositeAlphaFlagsKHR compositeAlphaFlags) {
 		_info.CompositeAlpha = compositeAlphaFlags;
 		return ref this;
 	}
@@ -275,32 +275,32 @@ public unsafe ref struct SwapchainBuilder {
 	}
 
 	private static void AddDesiredFormats(List<VkSurfaceFormatKHR> formats) {
-		formats.Add(new VkSurfaceFormatKHR(VkFormat.FormatB8g8r8a8Srgb, VkColorSpaceKHR.ColorspaceSrgbNonlinearKhr));
-		formats.Add(new VkSurfaceFormatKHR(VkFormat.FormatR8g8b8a8Srgb, VkColorSpaceKHR.ColorspaceSrgbNonlinearKhr));
+		formats.Add(new VkSurfaceFormatKHR(VkFormat.B8G8R8A8Srgb, VkColorSpaceKHR.SrgbNonLinear));
+		formats.Add(new VkSurfaceFormatKHR(VkFormat.R8G8B8A8Srgb, VkColorSpaceKHR.SrgbNonLinear));
 	}
 	private static void AddDesiredPresentModes(List<VkPresentModeKHR> presentModes) {
-		presentModes.Add(VkPresentModeKHR.PresentModeMailboxKhr);
-		presentModes.Add(VkPresentModeKHR.PresentModeFifoKhr);
+		presentModes.Add(VkPresentModeKHR.Mailbox);
+		presentModes.Add(VkPresentModeKHR.Fifo);
 	}
 
 	private unsafe struct SwapchainInfo {
 		public VkPhysicalDevice PhysicalDevice;
-		public VkDevice Device;
+		public Device Device;
 		public List<nint> PNextChain = [];
-		public VkSwapchainCreateFlagBitsKHR CreateFlags;
+		public VkSwapchainCreateFlagsKHR CreateFlags;
 		public VkSurfaceKHR Surface;
 		public List<VkSurfaceFormatKHR> DesiredFormats = [];
-		public uint InstanceVersion = Vk.VK_API_VERSION_1_0;
+		public VkVersion InstanceVersion = VkVersion.Version_1_0;
 		public uint DesiredWidth;
 		public uint DesiredHeight;
 		public uint ArrayLayerCount;
 		public uint MinImageCount;
 		public uint RequiredMinImageCount;
-		public VkImageUsageFlagBits ImageUsageFlags = VkImageUsageFlagBits.ImageUsageColorAttachmentBit;
+		public VkImageUsageFlags ImageUsageFlags = VkImageUsageFlags.ColorAttachment;
 		public uint GraphicsQueueIndex;
 		public uint PresentQueueIndex;
-		public VkSurfaceTransformFlagBitsKHR PreTransform;
-		public VkCompositeAlphaFlagBitsKHR CompositeAlpha = VkCompositeAlphaFlagBitsKHR.CompositeAlphaOpaqueBitKhr;
+		public VkSurfaceTransformFlagsKHR PreTransform;
+		public VkCompositeAlphaFlagsKHR CompositeAlpha = VkCompositeAlphaFlagsKHR.Opaque;
 		public List<VkPresentModeKHR> DesiredPresentModes = [];
 		public bool Clipped = true;
 		public VkSwapchainKHR OldSwapchain;

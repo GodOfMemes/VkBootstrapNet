@@ -1,5 +1,5 @@
 ﻿
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 public enum PhysicalDeviceError {
 	NoSurfaceProvided,

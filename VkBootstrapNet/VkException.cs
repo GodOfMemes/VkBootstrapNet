@@ -1,6 +1,6 @@
-﻿using OpenTK.Graphics.Vulkan;
+﻿using Vortice.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 public sealed class VkException : EnumException<VkResult> {
 	public VkException(VkResult error) : base(error) {

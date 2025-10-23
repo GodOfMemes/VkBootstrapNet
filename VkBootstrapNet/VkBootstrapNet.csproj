@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="DotNext" Version="5.19.1" />
-    <PackageReference Include="OpenTK.Graphics" Version="5.0.0-pre.13" />
+    <PackageReference Include="Vortice.Vulkan" Version="3.0.3" />
   </ItemGroup>
 
 </Project>

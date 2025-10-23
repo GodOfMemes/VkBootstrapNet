@@ -1,4 +1,4 @@
-﻿namespace Fuchsium.VkBootstrapNet;
+﻿namespace VkBootstrapNet;
 
 public enum PreferredDeviceType {
 	Other,

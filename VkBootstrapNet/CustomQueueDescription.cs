@@ -1,4 +1,4 @@
-﻿namespace Fuchsium.VkBootstrapNet;
+﻿namespace VkBootstrapNet;
 
 public struct CustomQueueDescription {
 	public int Index;

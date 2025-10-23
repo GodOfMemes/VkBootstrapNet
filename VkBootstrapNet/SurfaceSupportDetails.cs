@@ -1,8 +1,9 @@
-﻿using OpenTK.Graphics.Vulkan;
+﻿using Vortice.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
-internal struct SurfaceSupportDetails {
+internal struct SurfaceSupportDetails 
+{
 	public VkSurfaceCapabilitiesKHR Capabilities;
 	public VkSurfaceFormatKHR[] Formats;
 	public VkPresentModeKHR[] PresentModes;

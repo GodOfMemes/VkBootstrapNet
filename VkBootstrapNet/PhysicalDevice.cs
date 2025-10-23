@@ -1,19 +1,21 @@
-﻿using OpenTK.Graphics.Vulkan;
+﻿using Vortice.Vulkan;
+using static Vortice.Vulkan.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 public struct PhysicalDevice {
-	public string Name;
+	public VkUtf8String Name;
 	public VkPhysicalDevice VkPhysicalDevice;
+	public Instance Instance;
 	public VkSurfaceKHR Surface;
 
 	public VkPhysicalDeviceFeatures Features;
 	public VkPhysicalDeviceProperties Properties;
 	public VkPhysicalDeviceMemoryProperties MemoryProperties;
 
-	internal uint _instanceVersion;
-	internal List<string> _extensionsToEnable = [];
-	internal List<string> _availableExtensions = [];
+	internal VkVersion _instanceVersion;
+	internal List<VkUtf8String> _extensionsToEnable = [];
+	internal List<VkUtf8String> _availableExtensions = [];
 	internal VkQueueFamilyProperties[] _queueFamilies = [];
 	internal GenericFeatureChain _extendedFeaturesChain;
 
@@ -22,34 +24,34 @@ public struct PhysicalDevice {
 	internal Suitable _suitable;
 
 	public readonly bool HasDedicatedComputeQueue() {
-		return Detail.GetDedicatedQueueIndex(_queueFamilies, VkQueueFlagBits.QueueComputeBit, VkQueueFlagBits.QueueTransferBit) != uint.MaxValue;
+		return Detail.GetDedicatedQueueIndex(_queueFamilies, VkQueueFlags.Compute, VkQueueFlags.Transfer) != uint.MaxValue;
 	}
 
 	public readonly bool HasDedicatedTransferQueue() {
-		return Detail.GetDedicatedQueueIndex(_queueFamilies, VkQueueFlagBits.QueueTransferBit, VkQueueFlagBits.QueueComputeBit) != uint.MaxValue;
+		return Detail.GetDedicatedQueueIndex(_queueFamilies, VkQueueFlags.Transfer, VkQueueFlags.Compute) != uint.MaxValue;
 	}
 
 	public readonly bool HasSeperateComputeQueue() {
-		return Detail.GetSeperateQueueIndex(_queueFamilies, VkQueueFlagBits.QueueComputeBit, VkQueueFlagBits.QueueTransferBit) != uint.MaxValue;
+		return Detail.GetSeperateQueueIndex(_queueFamilies, VkQueueFlags.Compute, VkQueueFlags.Transfer) != uint.MaxValue;
 	}
 
 	public readonly bool HasSeperateTransferQueue() {
-		return Detail.GetSeperateQueueIndex(_queueFamilies, VkQueueFlagBits.QueueTransferBit, VkQueueFlagBits.QueueComputeBit) != uint.MaxValue;
+		return Detail.GetSeperateQueueIndex(_queueFamilies, VkQueueFlags.Transfer, VkQueueFlags.Compute) != uint.MaxValue;
 	}
 
 	public readonly IEnumerable<VkQueueFamilyProperties> GetQueueFamilies() {
 		return _queueFamilies;
 	}
 
-	public readonly IEnumerable<string> GetExtensions() {
+	public readonly IEnumerable<VkUtf8String> GetExtensions() {
 		return _extensionsToEnable;
 	}
 
-	public readonly IEnumerable<string> GetAvailableExtensions() {
+	public readonly IEnumerable<VkUtf8String> GetAvailableExtensions() {
 		return _availableExtensions;
 	}
 
-	public readonly bool IsExtensionPresent(string extension) {
+	public readonly bool IsExtensionPresent(VkUtf8String extension) {
 		return _availableExtensions.Any(x => x == extension);
 	}
 
@@ -58,7 +60,7 @@ public struct PhysicalDevice {
 		return IsFeaturesNodePresent(result);
 	}
 
-	public bool EnableExtensionIfPresent(string extension) {
+	public bool EnableExtensionIfPresent(VkUtf8String extension) {
 		if(IsExtensionPresent(extension)) {
 			_extensionsToEnable.Add(extension);
 			return true;
@@ -66,7 +68,7 @@ public struct PhysicalDevice {
 		return false;
 	}
 
-	public bool EnableExtensionsIfPresent(IEnumerable<string> extensions) {
+	public bool EnableExtensionsIfPresent(IEnumerable<VkUtf8String> extensions) {
 		foreach(var item in extensions) {
 			if(!EnableExtensionIfPresent(item)) return false;
 		}
@@ -75,7 +77,7 @@ public struct PhysicalDevice {
 
 	public unsafe bool EnableFeaturesIfPresent(in VkPhysicalDeviceFeatures featuresToEnable) {
 		VkPhysicalDeviceFeatures actualPdf;
-		Vk.GetPhysicalDeviceFeatures(VkPhysicalDevice, &actualPdf);
+		Instance.InstanceApi.vkGetPhysicalDeviceFeatures(VkPhysicalDevice, &actualPdf);
 
 		bool requiredFeaturesSupported = Detail.SupportsFeatures(actualPdf, featuresToEnable, new(), new());
 		if(requiredFeaturesSupported) {
@@ -109,13 +111,14 @@ public struct PhysicalDevice {
 		VkPhysicalDevice vkPhysicalDevice = VkPhysicalDevice;
 		GenericFeatureChain extendedFeaturesChain = _extendedFeaturesChain;
 
+		var instanceApi = Instance.InstanceApi;
 		fillChain.ChainUp((features) => {
-			bool instanceIs11 = instanceVersion >= Vk.VK_API_VERSION_1_1;
+			bool instanceIs11 = instanceVersion >= VkVersion.Version_1_1;
 			if(instanceIs11 || properties2ExtEnabled) {
 				if(instanceIs11) {
-					Vk.GetPhysicalDeviceFeatures2(vkPhysicalDevice, &features);
+					instanceApi.vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, &features);
 				} else {
-					Vk.GetPhysicalDeviceFeatures2KHR(vkPhysicalDevice, &features);
+					instanceApi.vkGetPhysicalDeviceFeatures2KHR(vkPhysicalDevice, &features);
 				}
 				requiredFeaturesSupported = fillChain.MatchAll(requestedFeatures);
 				if(requiredFeaturesSupported) {

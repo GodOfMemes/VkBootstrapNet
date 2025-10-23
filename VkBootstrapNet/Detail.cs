@@ -3,25 +3,23 @@ using System.Runtime.InteropServices;
 using System.Text;
 using DotNext;
 using DotNext.Collections.Generic;
-using OpenTK.Core.Native;
-using OpenTK.Graphics.Vulkan;
+using Vortice.Vulkan;
+using static Vortice.Vulkan.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 internal static unsafe class Detail {
-	public const string ValidationLayerName = "VK_LAYER_KHRONOS_validation";
+	public static VkUtf8String ValidationLayerName = "VK_LAYER_KHRONOS_validation"u8;
 
-	public static bool CheckLayerSupported(IEnumerable<VkLayerProperties> availableLayers, string layerName) {
+	public static bool CheckLayerSupported(IEnumerable<VkLayerProperties> availableLayers, VkUtf8String layerName) {
 		foreach(var layerProperties in availableLayers) {
-			string layerPropertiesName = Encoding.UTF8.GetString(layerProperties.layerName);
-			layerPropertiesName = layerPropertiesName.Substring(0, layerPropertiesName.IndexOf('\0'));
-			if(layerPropertiesName == layerName) {
+			if(new VkUtf8String(layerProperties.layerName) == layerName) {
 				return true;
 			}
 		}
 		return false;
 	}
-	public static bool CheckLayersSupported(IEnumerable<VkLayerProperties> availableLayers, IEnumerable<string> layerNames) {
+	public static bool CheckLayersSupported(IEnumerable<VkLayerProperties> availableLayers, IEnumerable<VkUtf8String> layerNames) {
 		foreach(var layerName in layerNames) {
 			if(!CheckLayerSupported(availableLayers, layerName)) {
 				return false;
@@ -29,17 +27,15 @@ internal static unsafe class Detail {
 		}
 		return true;
 	}
-	public static bool CheckExtensionSupported(IEnumerable<VkExtensionProperties> availableExtensions, string extensionName) {
+	public static bool CheckExtensionSupported(IEnumerable<VkExtensionProperties> availableExtensions, VkUtf8String extensionName) {
 		foreach(var extensionProperties in availableExtensions) {
-			string extensionPropertiesName = Encoding.UTF8.GetString(extensionProperties.extensionName);
-			extensionPropertiesName = extensionPropertiesName.Substring(0, extensionPropertiesName.IndexOf('\0'));
-			if(extensionPropertiesName == extensionName) {
+			if(new VkUtf8String(extensionProperties.extensionName) == extensionName) {
 				return true;
 			}
 		}
 		return false;
 	}
-	public static bool CheckExtensionsSupported(IEnumerable<VkExtensionProperties> availableExtensions, IEnumerable<string> extensionNames) {
+	public static bool CheckExtensionsSupported(IEnumerable<VkExtensionProperties> availableExtensions, IEnumerable<VkUtf8String> extensionNames) {
 		foreach(var extensionName in extensionNames) {
 			if(!CheckExtensionSupported(availableExtensions, extensionName)) {
 				return false;
@@ -47,7 +43,7 @@ internal static unsafe class Detail {
 		}
 		return true;
 	}
-	public static IEnumerable<string> CheckDeviceExtensionSupport(IEnumerable<string> availableExtensions, IEnumerable<string> requiredExtensions) {
+	public static IEnumerable<VkUtf8String> CheckDeviceExtensionSupport(IEnumerable<VkUtf8String> availableExtensions, IEnumerable<VkUtf8String> requiredExtensions) {
 		foreach(var availExt in availableExtensions) {
 			foreach(var reqExt in requiredExtensions) {
 				if(availExt == reqExt) {
@@ -118,75 +114,75 @@ internal static unsafe class Detail {
 	VkPhysicalDeviceFeatures requested,
 	GenericFeatureChain extensionSupported,
 	GenericFeatureChain extensionRequested) {
-		if(requested.robustBufferAccess != 0 && supported.robustBufferAccess == 0) return false;
-		if(requested.fullDrawIndexUint32 != 0 && supported.fullDrawIndexUint32 == 0) return false;
-		if(requested.imageCubeArray != 0 && supported.imageCubeArray == 0) return false;
-		if(requested.independentBlend != 0 && supported.independentBlend == 0) return false;
-		if(requested.geometryShader != 0 && supported.geometryShader == 0) return false;
-		if(requested.tessellationShader != 0 && supported.tessellationShader == 0) return false;
-		if(requested.sampleRateShading != 0 && supported.sampleRateShading == 0) return false;
-		if(requested.dualSrcBlend != 0 && supported.dualSrcBlend == 0) return false;
-		if(requested.logicOp != 0 && supported.logicOp == 0) return false;
-		if(requested.multiDrawIndirect != 0 && supported.multiDrawIndirect == 0) return false;
-		if(requested.drawIndirectFirstInstance != 0 && supported.drawIndirectFirstInstance == 0) return false;
-		if(requested.depthClamp != 0 && supported.depthClamp == 0) return false;
-		if(requested.depthBiasClamp != 0 && supported.depthBiasClamp == 0) return false;
-		if(requested.fillModeNonSolid != 0 && supported.fillModeNonSolid == 0) return false;
-		if(requested.depthBounds != 0 && supported.depthBounds == 0) return false;
-		if(requested.wideLines != 0 && supported.wideLines == 0) return false;
-		if(requested.largePoints != 0 && supported.largePoints == 0) return false;
-		if(requested.alphaToOne != 0 && supported.alphaToOne == 0) return false;
-		if(requested.multiViewport != 0 && supported.multiViewport == 0) return false;
-		if(requested.samplerAnisotropy != 0 && supported.samplerAnisotropy == 0) return false;
-		if(requested.textureCompressionETC2 != 0 && supported.textureCompressionETC2 == 0) return false;
-		if(requested.textureCompressionASTC_LDR != 0 && supported.textureCompressionASTC_LDR == 0) return false;
-		if(requested.textureCompressionBC != 0 && supported.textureCompressionBC == 0) return false;
-		if(requested.occlusionQueryPrecise != 0 && supported.occlusionQueryPrecise == 0) return false;
-		if(requested.pipelineStatisticsQuery != 0 && supported.pipelineStatisticsQuery == 0) return false;
-		if(requested.vertexPipelineStoresAndAtomics != 0 && supported.vertexPipelineStoresAndAtomics == 0) return false;
-		if(requested.fragmentStoresAndAtomics != 0 && supported.fragmentStoresAndAtomics == 0) return false;
-		if(requested.shaderTessellationAndGeometryPointSize != 0 && supported.shaderTessellationAndGeometryPointSize == 0) return false;
-		if(requested.shaderImageGatherExtended != 0 && supported.shaderImageGatherExtended == 0) return false;
-		if(requested.shaderStorageImageExtendedFormats != 0 && supported.shaderStorageImageExtendedFormats == 0) return false;
-		if(requested.shaderStorageImageMultisample != 0 && supported.shaderStorageImageMultisample == 0) return false;
-		if(requested.shaderStorageImageReadWithoutFormat != 0 && supported.shaderStorageImageReadWithoutFormat == 0) return false;
-		if(requested.shaderStorageImageWriteWithoutFormat != 0 && supported.shaderStorageImageWriteWithoutFormat == 0) return false;
-		if(requested.shaderUniformBufferArrayDynamicIndexing != 0 && supported.shaderUniformBufferArrayDynamicIndexing == 0) return false;
-		if(requested.shaderSampledImageArrayDynamicIndexing != 0 && supported.shaderSampledImageArrayDynamicIndexing == 0) return false;
-		if(requested.shaderStorageBufferArrayDynamicIndexing != 0 && supported.shaderStorageBufferArrayDynamicIndexing == 0) return false;
-		if(requested.shaderStorageImageArrayDynamicIndexing != 0 && supported.shaderStorageImageArrayDynamicIndexing == 0) return false;
-		if(requested.shaderClipDistance != 0 && supported.shaderClipDistance == 0) return false;
-		if(requested.shaderCullDistance != 0 && supported.shaderCullDistance == 0) return false;
-		if(requested.shaderFloat64 != 0 && supported.shaderFloat64 == 0) return false;
-		if(requested.shaderInt64 != 0 && supported.shaderInt64 == 0) return false;
-		if(requested.shaderInt16 != 0 && supported.shaderInt16 == 0) return false;
-		if(requested.shaderResourceResidency != 0 && supported.shaderResourceResidency == 0) return false;
-		if(requested.shaderResourceMinLod != 0 && supported.shaderResourceMinLod == 0) return false;
-		if(requested.sparseBinding != 0 && supported.sparseBinding == 0) return false;
-		if(requested.sparseResidencyBuffer != 0 && supported.sparseResidencyBuffer == 0) return false;
-		if(requested.sparseResidencyImage2D != 0 && supported.sparseResidencyImage2D == 0) return false;
-		if(requested.sparseResidencyImage3D != 0 && supported.sparseResidencyImage3D == 0) return false;
-		if(requested.sparseResidency2Samples != 0 && supported.sparseResidency2Samples == 0) return false;
-		if(requested.sparseResidency4Samples != 0 && supported.sparseResidency4Samples == 0) return false;
-		if(requested.sparseResidency8Samples != 0 && supported.sparseResidency8Samples == 0) return false;
-		if(requested.sparseResidency16Samples != 0 && supported.sparseResidency16Samples == 0) return false;
-		if(requested.sparseResidencyAliased != 0 && supported.sparseResidencyAliased == 0) return false;
-		if(requested.variableMultisampleRate != 0 && supported.variableMultisampleRate == 0) return false;
-		if(requested.inheritedQueries != 0 && supported.inheritedQueries == 0) return false;
+		if(requested.robustBufferAccess != false && supported.robustBufferAccess == false) return false;
+		if(requested.fullDrawIndexUint32 != false && supported.fullDrawIndexUint32 == false) return false;
+		if(requested.imageCubeArray != false && supported.imageCubeArray == false) return false;
+		if(requested.independentBlend != false && supported.independentBlend == false) return false;
+		if(requested.geometryShader != false && supported.geometryShader == false) return false;
+		if(requested.tessellationShader != false && supported.tessellationShader == false) return false;
+		if(requested.sampleRateShading != false && supported.sampleRateShading == false) return false;
+		if(requested.dualSrcBlend != false && supported.dualSrcBlend == false) return false;
+		if(requested.logicOp != false && supported.logicOp == false) return false;
+		if(requested.multiDrawIndirect != false && supported.multiDrawIndirect == false) return false;
+		if(requested.drawIndirectFirstInstance != false && supported.drawIndirectFirstInstance == false) return false;
+		if(requested.depthClamp != false && supported.depthClamp == false) return false;
+		if(requested.depthBiasClamp != false && supported.depthBiasClamp == false) return false;
+		if(requested.fillModeNonSolid != false && supported.fillModeNonSolid == false) return false;
+		if(requested.depthBounds != false && supported.depthBounds == false) return false;
+		if(requested.wideLines != false && supported.wideLines == false) return false;
+		if(requested.largePoints != false && supported.largePoints == false) return false;
+		if(requested.alphaToOne != false && supported.alphaToOne == false) return false;
+		if(requested.multiViewport != false && supported.multiViewport == false) return false;
+		if(requested.samplerAnisotropy != false && supported.samplerAnisotropy == false) return false;
+		if(requested.textureCompressionETC2 != false && supported.textureCompressionETC2 == false) return false;
+		if(requested.textureCompressionASTC_LDR != false && supported.textureCompressionASTC_LDR == false) return false;
+		if(requested.textureCompressionBC != false && supported.textureCompressionBC == false) return false;
+		if(requested.occlusionQueryPrecise != false && supported.occlusionQueryPrecise == false) return false;
+		if(requested.pipelineStatisticsQuery != false && supported.pipelineStatisticsQuery == false) return false;
+		if(requested.vertexPipelineStoresAndAtomics != false && supported.vertexPipelineStoresAndAtomics == false) return false;
+		if(requested.fragmentStoresAndAtomics != false && supported.fragmentStoresAndAtomics == false) return false;
+		if(requested.shaderTessellationAndGeometryPointSize != false && supported.shaderTessellationAndGeometryPointSize == false) return false;
+		if(requested.shaderImageGatherExtended != false && supported.shaderImageGatherExtended == false) return false;
+		if(requested.shaderStorageImageExtendedFormats != false && supported.shaderStorageImageExtendedFormats == false) return false;
+		if(requested.shaderStorageImageMultisample != false && supported.shaderStorageImageMultisample == false) return false;
+		if(requested.shaderStorageImageReadWithoutFormat != false && supported.shaderStorageImageReadWithoutFormat == false) return false;
+		if(requested.shaderStorageImageWriteWithoutFormat != false && supported.shaderStorageImageWriteWithoutFormat == false) return false;
+		if(requested.shaderUniformBufferArrayDynamicIndexing != false && supported.shaderUniformBufferArrayDynamicIndexing == false) return false;
+		if(requested.shaderSampledImageArrayDynamicIndexing != false && supported.shaderSampledImageArrayDynamicIndexing == false) return false;
+		if(requested.shaderStorageBufferArrayDynamicIndexing != false && supported.shaderStorageBufferArrayDynamicIndexing == false) return false;
+		if(requested.shaderStorageImageArrayDynamicIndexing != false && supported.shaderStorageImageArrayDynamicIndexing == false) return false;
+		if(requested.shaderClipDistance != false && supported.shaderClipDistance == false) return false;
+		if(requested.shaderCullDistance != false && supported.shaderCullDistance == false) return false;
+		if(requested.shaderFloat64 != false && supported.shaderFloat64 == false) return false;
+		if(requested.shaderInt64 != false && supported.shaderInt64 == false) return false;
+		if(requested.shaderInt16 != false && supported.shaderInt16 == false) return false;
+		if(requested.shaderResourceResidency != false && supported.shaderResourceResidency == false) return false;
+		if(requested.shaderResourceMinLod != false && supported.shaderResourceMinLod == false) return false;
+		if(requested.sparseBinding != false && supported.sparseBinding == false) return false;
+		if(requested.sparseResidencyBuffer != false && supported.sparseResidencyBuffer == false) return false;
+		if(requested.sparseResidencyImage2D != false && supported.sparseResidencyImage2D == false) return false;
+		if(requested.sparseResidencyImage3D != false && supported.sparseResidencyImage3D == false) return false;
+		if(requested.sparseResidency2Samples != false && supported.sparseResidency2Samples == false) return false;
+		if(requested.sparseResidency4Samples != false && supported.sparseResidency4Samples == false) return false;
+		if(requested.sparseResidency8Samples != false && supported.sparseResidency8Samples == false) return false;
+		if(requested.sparseResidency16Samples != false && supported.sparseResidency16Samples == false) return false;
+		if(requested.sparseResidencyAliased != false && supported.sparseResidencyAliased == false) return false;
+		if(requested.variableMultisampleRate != false && supported.variableMultisampleRate == false) return false;
+		if(requested.inheritedQueries != false && supported.inheritedQueries == false) return false;
 
 		return extensionSupported.MatchAll(extensionRequested);
 	}
 
-	public static uint GetFirstQueueIndex(VkQueueFamilyProperties[] families, VkQueueFlagBits desiredFlags) {
+	public static uint GetFirstQueueIndex(VkQueueFamilyProperties[] families, VkQueueFlags desiredFlags) {
 		for(int i = 0; i < families.Length; i++) {
 			if((families[i].queueFlags & desiredFlags) == desiredFlags) return (uint)i;
 		}
 		return uint.MaxValue;
 	}
-	public static uint GetSeperateQueueIndex(VkQueueFamilyProperties[] families, VkQueueFlagBits desiredFlags, VkQueueFlagBits undesiredFlags) {
+	public static uint GetSeperateQueueIndex(VkQueueFamilyProperties[] families, VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags) {
 		uint index = uint.MaxValue;
 		for(int i=0; i<families.Length; i++) {
-			if((families[i].queueFlags & desiredFlags) == desiredFlags && ((families[i].queueFlags & VkQueueFlagBits.QueueGraphicsBit) == 0)) {
+			if((families[i].queueFlags & desiredFlags) == desiredFlags && ((families[i].queueFlags & VkQueueFlags.Graphics) == 0)) {
 				if((families[i].queueFlags & undesiredFlags) == 0) {
 					return (uint)i;
 				} else {
@@ -196,24 +192,26 @@ internal static unsafe class Detail {
 		}
 		return index;
 	}
-	public static uint GetDedicatedQueueIndex(VkQueueFamilyProperties[] families, VkQueueFlagBits desiredFlags, VkQueueFlagBits undesiredFlags) {
+	public static uint GetDedicatedQueueIndex(VkQueueFamilyProperties[] families, VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags) {
 		for(int i = 0; i < families.Length; i++) {
-			if((families[i].queueFlags & desiredFlags) == desiredFlags && (families[i].queueFlags & VkQueueFlagBits.QueueGraphicsBit) == 0 && (families[i].queueFlags & undesiredFlags) == 0) {
+			if((families[i].queueFlags & desiredFlags) == desiredFlags && (families[i].queueFlags & VkQueueFlags.Graphics) == 0 && (families[i].queueFlags & undesiredFlags) == 0) {
 				return (uint)i;
 			}
 		}
 		return uint.MaxValue;
 	}
-	public static uint GetPresentQueueIndex(VkPhysicalDevice physDevice, VkSurfaceKHR surface, VkQueueFamilyProperties[] families) {
+	public static uint GetPresentQueueIndex(VkInstanceApi instanceApi,PhysicalDevice physDevice, VkSurfaceKHR surface, VkQueueFamilyProperties[] families) 
+	{
 		for(int i = 0; i < families.Length; i++) {
-			int presentSupport = 0;
-			if(surface != default) {
-				VkResult res = Vk.GetPhysicalDeviceSurfaceSupportKHR(physDevice, (uint)i, surface, &presentSupport);
+			VkBool32 presentSupport = false;
+			if(surface.IsNotNull) {
+				VkResult res = instanceApi.vkGetPhysicalDeviceSurfaceSupportKHR(physDevice.VkPhysicalDevice, (uint)i, surface, &presentSupport);
 				if(res != VkResult.Success) {
 					return uint.MaxValue;
 				}
 			}
-			if(presentSupport == 1) {
+			if(presentSupport) 
+			{
 				return (uint)i;
 			}
 		}
@@ -270,13 +268,14 @@ internal static unsafe class Detail {
 	}
 
 	public static VkResult CreateDebugUtilsMessenger(
-		VkInstance vkInstance,
-		delegate* unmanaged[Cdecl]<VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagBitsEXT, VkDebugUtilsMessengerCallbackDataEXT*, void*, int> debugCallback,
-		VkDebugUtilsMessageSeverityFlagBitsEXT debugMessageSeverity,
-		VkDebugUtilsMessageTypeFlagBitsEXT debugMessageType,
+		Instance instance,
+		delegate* unmanaged<VkDebugUtilsMessageSeverityFlagsEXT, VkDebugUtilsMessageTypeFlagsEXT, VkDebugUtilsMessengerCallbackDataEXT*, void*, uint> debugCallback,
+		VkDebugUtilsMessageSeverityFlagsEXT debugMessageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT debugMessageType,
 		void* debugUserDataPointer,
 		VkDebugUtilsMessengerEXT* v,
-		VkAllocationCallbacks* allocationCallbacks) {
+		VkAllocationCallbacks* allocationCallbacks) 
+	{
 		if(debugCallback == null) {
 			debugCallback = &DebugUtility.DefaultDebugCallback;
 		}
@@ -287,25 +286,28 @@ internal static unsafe class Detail {
 			pUserData = debugUserDataPointer
 		};
 
-		return Vk.CreateDebugUtilsMessengerEXT(vkInstance, &createInfo, allocationCallbacks, v);
+		return instance.InstanceApi.vkCreateDebugUtilsMessengerEXT(instance.VkInstance, &createInfo, allocationCallbacks, v);
 	}
 
-	public static Result<SurfaceSupportDetails> QuerySurfaceSupportDetails(VkPhysicalDevice physDevice, VkSurfaceKHR surface) {
-		if(surface == default) {
+	public static Result<SurfaceSupportDetails> QuerySurfaceSupportDetails(VkInstance instance, VkPhysicalDevice physDevice, VkSurfaceKHR surface) {
+		if(surface.IsNull) {
 			return Result.FromException<SurfaceSupportDetails>(new SurfaceSupportException(SurfaceSupportError.SurfaceHandleNull));
 		}
 
+		var api = GetApi(instance);
+
 		VkSurfaceCapabilitiesKHR capabilities;
-		VkResult res = Vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(physDevice, surface, &capabilities);
+		VkResult res = api.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physDevice, surface, &capabilities);
 		if(res != VkResult.Success) {
 			return Result.FromException<SurfaceSupportDetails>(new SurfaceSupportException(SurfaceSupportError.FailedGetSurfaceCapabilities, new VkException(res)));
 		}
 
-		var formatsRet = GetVector(out VkSurfaceFormatKHR[] formats, (p1, p2) => Vk.GetPhysicalDeviceSurfaceFormatsKHR(physDevice, surface, (uint*)p1, (VkSurfaceFormatKHR*)p2));
-		if(formatsRet != VkResult.Success) {
+		var formatsRet = GetVector(out VkSurfaceFormatKHR[] formats, (p1, p2) => api.vkGetPhysicalDeviceSurfaceFormatsKHR(physDevice, surface, (uint*)p1, (VkSurfaceFormatKHR*)p2));
+		if(formatsRet != VkResult.Success)
+		{
 			return Result.FromException<SurfaceSupportDetails>(new SurfaceSupportException(SurfaceSupportError.FailedEnumerateSurfaceFormats, new VkException(formatsRet)));
 		}
-		var presentModesRet = GetVector(out VkPresentModeKHR[] presentModes, (p1, p2) => Vk.GetPhysicalDeviceSurfacePresentModesKHR(physDevice, surface, (uint*)p1, (VkPresentModeKHR*)p2));
+		var presentModesRet = GetVector(out VkPresentModeKHR[] presentModes, (p1, p2) => api.vkGetPhysicalDeviceSurfacePresentModesKHR(physDevice, surface, (uint*)p1, (VkPresentModeKHR*)p2));
 		if(presentModesRet != VkResult.Success) {
 			return Result.FromException<SurfaceSupportDetails>(new SurfaceSupportException(SurfaceSupportError.FailedEnumeratePresentModes, new VkException(formatsRet)));
 		}
@@ -343,7 +345,7 @@ internal static unsafe class Detail {
 			}
 		}
 
-		return VkPresentModeKHR.PresentModeFifoKhr;
+		return VkPresentModeKHR.Fifo;
 	}
 
 	public static VkExtent2D FindExtent(in VkSurfaceCapabilitiesKHR capabilities, uint desiredWidth, uint desiredHeight) {

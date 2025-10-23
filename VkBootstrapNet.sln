@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.13.35806.99
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fuchsium.VkBootstrapNet", "Fuchsium.VkBootstrapNet\Fuchsium.VkBootstrapNet.csproj", "{B633F0B2-096D-4E9B-A38B-F6DFB2E270A6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VkBootstrapNet", "VkBootstrapNet\VkBootstrapNet.csproj", "{B633F0B2-096D-4E9B-A38B-F6DFB2E270A6}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SystemInfo", "Samples\SystemInfo\SystemInfo.csproj", "{083BABAA-1916-42D0-89AA-7E5393631AE4}"
 EndProject

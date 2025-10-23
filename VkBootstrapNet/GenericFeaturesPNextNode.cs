@@ -1,9 +1,10 @@
 ﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using OpenTK.Graphics.Vulkan;
+using Vortice.Vulkan;
+using static Vortice.Vulkan.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 [StructLayout(LayoutKind.Sequential, Pack = 0)]
 internal unsafe struct GenericFeaturesPNextNode {

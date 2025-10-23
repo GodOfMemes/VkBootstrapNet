@@ -1,9 +1,10 @@
 ﻿using System.Runtime.InteropServices;
+using System.Text;
 using DotNext;
-using OpenTK.Graphics;
-using OpenTK.Graphics.Vulkan;
+using Vortice.Vulkan;
+using static Vortice.Vulkan.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 public unsafe ref struct InstanceBuilder {
 	public ref InstanceBuilder SetAppName(string appName) {
@@ -16,50 +17,70 @@ public unsafe ref struct InstanceBuilder {
 	}
 
 	public ref InstanceBuilder SetAppVersion(uint version) {
-		_info.AppVersion = version;
+		_info.AppVersion = new(version);
 		return ref this;
 	}
 	public ref InstanceBuilder SetAppVersion(uint major, uint minor, uint patch = 0) {
-		_info.AppVersion = Vk.MAKE_API_VERSION(0, major, minor, patch);
+		_info.AppVersion = new VkVersion(0, major, minor, patch);
+		return ref this;
+	}
+
+	public ref InstanceBuilder SetAppVersion(VkVersion version) {
+		_info.AppVersion = version;
 		return ref this;
 	}
 
 	public ref InstanceBuilder SetEngineVersion(uint version) {
-		_info.EngineVersion = version;
+		_info.EngineVersion = new(version);
 		return ref this;
 	}
 	public ref InstanceBuilder SetEngineVersion(uint major, uint minor, uint patch = 0) {
-		_info.EngineVersion = Vk.MAKE_API_VERSION(0, major, minor, patch);
+		_info.EngineVersion = new VkVersion(0, major, minor, patch);
+		return ref this;
+	}
+	
+	public ref InstanceBuilder SetEngineVersion(VkVersion version) {
+		_info.EngineVersion = version;
 		return ref this;
 	}
 
 	public ref InstanceBuilder RequireApiVersion(uint version) {
-		_info.RequiredApiVersion = version;
+		_info.RequiredApiVersion = new(version);
 		return ref this;
 	}
 	public ref InstanceBuilder RequireApiVersion(uint major, uint minor, uint patch = 0) {
-		_info.RequiredApiVersion = Vk.MAKE_API_VERSION(0, major, minor, patch);
+		_info.RequiredApiVersion = new VkVersion(0, major, minor, patch);
+		return ref this;
+	}
+
+	public ref InstanceBuilder RequireApiVersion(VkVersion version) {
+		_info.RequiredApiVersion = version;
 		return ref this;
 	}
 
 	public ref InstanceBuilder SetMinimumInstanceVersion(uint version) {
-		_info.MinimumInstanceVersion = version;
+		_info.MinimumInstanceVersion = new(version);
 		return ref this;
 	}
 	public ref InstanceBuilder SetMinimumInstanceVersion(uint major, uint minor, uint patch = 0) {
-		_info.MinimumInstanceVersion = Vk.MAKE_API_VERSION(0, major, minor, patch);
+		_info.MinimumInstanceVersion = new VkVersion(0, major, minor, patch);
+		return ref this;
+	}
+  
+	public ref InstanceBuilder SetMinimumInstanceVersion(VkVersion version) {
+		_info.MinimumInstanceVersion = version;
 		return ref this;
 	}
 
-	public ref InstanceBuilder EnableLayer(string layerName) {
+	public ref InstanceBuilder EnableLayer(VkUtf8String layerName) {
 		_info.Layers.Add(layerName);
 		return ref this;
 	}
-	public ref InstanceBuilder EnableExtension(string extensionName) {
+	public ref InstanceBuilder EnableExtension(VkUtf8String extensionName) {
 		_info.Extensions.Add(extensionName);
 		return ref this;
 	}
-	public ref InstanceBuilder EnableExtensions(IEnumerable<string> extensions) {
+	public ref InstanceBuilder EnableExtensions(IEnumerable<VkUtf8String> extensions) {
 		_info.Extensions.AddRange(extensions);
 		return ref this;
 	}
@@ -83,7 +104,7 @@ public unsafe ref struct InstanceBuilder {
 		_info.DebugCallback = &DebugUtility.DefaultDebugCallback;
 		return ref this;
 	}
-	public ref InstanceBuilder SetDebugCallback(delegate* unmanaged[Cdecl]<VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagBitsEXT, VkDebugUtilsMessengerCallbackDataEXT*, void*, int> callback) {
+	public ref InstanceBuilder SetDebugCallback(delegate* unmanaged<VkDebugUtilsMessageSeverityFlagsEXT, VkDebugUtilsMessageTypeFlagsEXT, VkDebugUtilsMessengerCallbackDataEXT*, void*, uint> callback) {
 		_info.UseDebugMessenger = true;
 		_info.DebugCallback = callback;
 		return ref this;
@@ -93,19 +114,19 @@ public unsafe ref struct InstanceBuilder {
 		return ref this;
 
 	}
-	public ref InstanceBuilder SetDebugMessengerSeverity(VkDebugUtilsMessageSeverityFlagBitsEXT severity) {
+	public ref InstanceBuilder SetDebugMessengerSeverity(VkDebugUtilsMessageSeverityFlagsEXT severity) {
 		_info.DebugMessageSeverity = severity;
 		return ref this;
 	}
-	public ref InstanceBuilder AddDebugMessengerSeverity(VkDebugUtilsMessageSeverityFlagBitsEXT severity) {
+	public ref InstanceBuilder AddDebugMessengerSeverity(VkDebugUtilsMessageSeverityFlagsEXT severity) {
 		_info.DebugMessageSeverity |= severity;
 		return ref this;
 	}
-	public ref InstanceBuilder SetDebugMessengerType(VkDebugUtilsMessageTypeFlagBitsEXT type) {
+	public ref InstanceBuilder SetDebugMessengerType(VkDebugUtilsMessageTypeFlagsEXT type) {
 		_info.DebugMessageType = type;
 		return ref this;
 	}
-	public ref InstanceBuilder AddDebugMessengerType(VkDebugUtilsMessageTypeFlagBitsEXT type) {
+	public ref InstanceBuilder AddDebugMessengerType(VkDebugUtilsMessageTypeFlagsEXT type) {
 		_info.DebugMessageType |= type;
 		return ref this;
 	}
@@ -136,65 +157,84 @@ public unsafe ref struct InstanceBuilder {
 		}
 		var system = sysInfoRet.Value;
 
-		uint instanceVersion = Vk.VK_API_VERSION_1_0;
+		VkVersion instanceVersion = VkVersion.Version_1_0;
 
-		if(_info.MinimumInstanceVersion > Vk.VK_API_VERSION_1_0 || _info.RequiredApiVersion > Vk.VK_API_VERSION_1_0) {
-			VkResult res = Vk.EnumerateInstanceVersion(&instanceVersion);
-			if(res != VkResult.Success && _info.RequiredApiVersion > 0) {
+    	if(_info.MinimumInstanceVersion > VkVersion.Version_1_0 || _info.RequiredApiVersion > VkVersion.Version_1_0)
+		{
+			uint temp = 0;
+			VkResult res = vkEnumerateInstanceVersion(&temp);
+      		instanceVersion = new(temp);
+			if(res != VkResult.Success && (_info.RequiredApiVersion > 0 || _info.MinimumInstanceVersion > 0)) 
+			{
 				return Result.FromException<Instance>(new InstanceException(InstanceError.VulkanVersionUnavailable));
+			}
+      
+			if (vkEnumerateInstanceVersion_ptr == null || (_info.MinimumInstanceVersion > 0 && instanceVersion < _info.MinimumInstanceVersion) || (_info.MinimumInstanceVersion == 0 && instanceVersion < _info.RequiredApiVersion)) 
+			{
+				VkVersion version_error = _info.MinimumInstanceVersion == 0 ? _info.RequiredApiVersion : _info.MinimumInstanceVersion;
+				if (version_error.Minor == 4)
+					return Result.FromException<Instance>(new InstanceException(InstanceError.VulkanVersion14Unavailable));
+				else if (version_error.Minor == 3)
+					return Result.FromException<Instance>(new InstanceException(InstanceError.VulkanVersion13Unavailable));
+				else if (version_error.Minor == 2)
+					return Result.FromException<Instance>(new InstanceException(InstanceError.VulkanVersion12Unavailable));
+				else if (version_error.Minor == 1)
+					return Result.FromException<Instance>(new InstanceException(InstanceError.VulkanVersion11Unavailable));
+				else
+					return Result.FromException<Instance>(new InstanceException(InstanceError.VulkanVersionUnavailable));
 			}
 		}
 
-		uint apiVersion = instanceVersion < Vk.VK_API_VERSION_1_1 ? instanceVersion : _info.RequiredApiVersion;
+		VkVersion apiVersion = instanceVersion < VkVersion.Version_1_1 ? instanceVersion : _info.RequiredApiVersion;
 
-		using NativeString appName = (NativeString)(_info.AppName ?? "");
-		using NativeString engineName = (NativeString)(_info.EngineName ?? "");
+		VkUtf8ReadOnlyString appName = Encoding.UTF8.GetBytes(_info.AppName ?? "");
+		VkUtf8ReadOnlyString engineName = Encoding.UTF8.GetBytes(_info.EngineName ?? "");
 
 		VkApplicationInfo appInfo = new() {
-			pApplicationName = (byte*)appName.Address,
+			pApplicationName = appName,
 			applicationVersion = _info.AppVersion,
-			pEngineName = (byte*)engineName.Address,
+			pEngineName = engineName,
 			engineVersion = _info.EngineVersion,
 			apiVersion = apiVersion
 		};
 
-		List<string> extensions = _info.Extensions.ToList();
-		List<string> layers = _info.Layers.ToList();
+		List<VkUtf8String> extensions = _info.Extensions.ToList();
+		List<VkUtf8String> layers = _info.Layers.ToList();
 
 		if(_info.DebugCallback != null && _info.UseDebugMessenger && system.DebugUtilsAvailable) {
-			extensions.Add(Vk.ExtDebugUtilsExtensionName);
+			extensions.Add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 		}
 
-		bool properties2ExtEnabled = apiVersion < Vk.VK_API_VERSION_1_1 && Detail.CheckExtensionSupported(system.AvailableExtensions, Vk.KhrPortabilityEnumerationExtensionName);
+		bool properties2ExtEnabled = apiVersion < VkVersion.Version_1_1 && Detail.CheckExtensionSupported(system.AvailableExtensions, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 		if(properties2ExtEnabled) {
-			extensions.Add(Vk.KhrGetPhysicalDeviceProperties2ExtensionName);
+			extensions.Add(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 		}
 
-		bool portabilityEnumerationSupport = Detail.CheckExtensionSupported(system.AvailableExtensions, Vk.KhrPortabilityEnumerationExtensionName);
+		bool portabilityEnumerationSupport = Detail.CheckExtensionSupported(system.AvailableExtensions, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 		if(portabilityEnumerationSupport) {
-			extensions.Add(Vk.KhrPortabilityEnumerationExtensionName);
+			extensions.Add(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 		}
 
 		if(!_info.HeadlessContext) {
-			bool CheckAddWindowExt(string name) {
+			bool CheckAddWindowExt(VkUtf8String name) {
 				if(!Detail.CheckExtensionSupported(system.AvailableExtensions, name)) {
 					return false;
 				}
 				extensions.Add(name);
 				return true;
 			}
-			bool khrSurfaceAdded = CheckAddWindowExt("VK_KHR_surface");
+			bool khrSurfaceAdded = CheckAddWindowExt("VK_KHR_surface"u8);
 			bool addedWindowExts = false;
 			//TODO: Detect android & direct2display
 			if(RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
-				addedWindowExts = CheckAddWindowExt("VK_KHR_win32_surface");
+				addedWindowExts = CheckAddWindowExt("VK_KHR_win32_surface"u8);
 			} else if(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD)) {
 				// Make sure all three calls to check_add_window_ext, don't allow short circuiting
-				addedWindowExts = CheckAddWindowExt("VK_KHR_xcb_surface");
-				addedWindowExts = CheckAddWindowExt("VK_KHR_xlib_surface") || addedWindowExts;
-				addedWindowExts = CheckAddWindowExt("VK_KHR_wayland_surface") || addedWindowExts;
+				addedWindowExts = CheckAddWindowExt("VK_KHR_xcb_surface"u8);
+				addedWindowExts = CheckAddWindowExt("VK_KHR_xlib_surface"u8) || addedWindowExts;
+				addedWindowExts = CheckAddWindowExt("VK_KHR_wayland_surface"u8) || addedWindowExts;
 			} else if(RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) {
-				addedWindowExts = CheckAddWindowExt("VK_EXT_metal_surface");
+				addedWindowExts = CheckAddWindowExt("VK_EXT_metal_surface"u8);
 			}
 
 			if(!khrSurfaceAdded || !addedWindowExts) {
@@ -268,7 +308,7 @@ public unsafe ref struct InstanceBuilder {
 
 	// Make this part of Build into a seperate method so C# doesnt complain about getting a pointer to instanceVersion
 	// (Not neccessary anymore)
-	private readonly Result<Instance> BuildRestOfIt(uint instanceVersion, uint apiVersion, VkApplicationInfo appInfo, List<string> extensions, List<string> layers, bool properties2ExtEnabled, bool portabilityEnumerationSupport, List<nint> pNextChain, List<GCHandle> miscHandles) {
+	private readonly Result<Instance> BuildRestOfIt(VkVersion instanceVersion, VkVersion apiVersion, VkApplicationInfo appInfo, List<VkUtf8String> extensions, List<VkUtf8String> layers, bool properties2ExtEnabled, bool portabilityEnumerationSupport, List<nint> pNextChain, List<GCHandle> miscHandles) {
 		VkInstanceCreateInfo instanceCreateInfo = new();
 		InstanceInfo info = _info;
 		Detail.SetupPNextChain(&instanceCreateInfo, pNextChain);
@@ -279,28 +319,28 @@ public unsafe ref struct InstanceBuilder {
 		instanceCreateInfo.pApplicationInfo = (VkApplicationInfo*)pApplicationInfo.AddrOfPinnedObject();
 
 		instanceCreateInfo.enabledExtensionCount = (uint)extensions.Count;
-		using NativeStringArray ppEnabledExtensionNames = NativeStringArray.Create(extensions.ToArray());
-		instanceCreateInfo.ppEnabledExtensionNames = (byte**)ppEnabledExtensionNames.Address;
+		using var ppEnabledExtensionNames = new VkStringArray(extensions);
+		instanceCreateInfo.ppEnabledExtensionNames = ppEnabledExtensionNames;
 
 		instanceCreateInfo.enabledLayerCount = (uint)layers.Count;
-		using NativeStringArray ppEnabledLayerNames = NativeStringArray.Create(layers.ToArray());
-		instanceCreateInfo.ppEnabledLayerNames = (byte**)ppEnabledLayerNames.Address;
+    	using var ppEnabledLayerNames = new VkStringArray(layers);
+		instanceCreateInfo.ppEnabledLayerNames = ppEnabledLayerNames;
 
 		if(portabilityEnumerationSupport) {
-			instanceCreateInfo.flags |= VkInstanceCreateFlagBits.InstanceCreateEnumeratePortabilityBitKhr;
+			instanceCreateInfo.flags |= VkInstanceCreateFlags.EnumeratePortabilityKHR;
 		}
 
 		Instance instance = new();
 		VkInstanceCreateInfo localInstanceCreateInfo = instanceCreateInfo;
-		VkResult res = Vk.CreateInstance(&localInstanceCreateInfo, info.AllocationCallbacks, &instance.VkInstance);
+		VkResult res = vkCreateInstance(&localInstanceCreateInfo, info.AllocationCallbacks, &instance.VkInstance);
 		if(res != VkResult.Success) {
 			return Result.FromException<Instance>(new InstanceException(InstanceError.FailedCreateInstance, new VkException(res)));
 		}
 
-		VKLoader.SetInstance(instance.VkInstance);
+		instance.InstanceApi = GetApi(instance.VkInstance);
 
 		if(info.UseDebugMessenger) {
-			res = Detail.CreateDebugUtilsMessenger(instance.VkInstance,
+			res = Detail.CreateDebugUtilsMessenger(instance,
 				info.DebugCallback,
 				info.DebugMessageSeverity,
 				info.DebugMessageType,
@@ -329,21 +369,21 @@ public unsafe ref struct InstanceBuilder {
 	private unsafe struct InstanceInfo {
 		public string? AppName;
 		public string? EngineName;
-		public uint AppVersion;
-		public uint EngineVersion;
-		public uint MinimumInstanceVersion;
-		public uint RequiredApiVersion;
+		public VkVersion AppVersion;
+		public VkVersion EngineVersion;
+		public VkVersion MinimumInstanceVersion;
+		public VkVersion RequiredApiVersion;
 
-		public List<string> Layers = [];
-		public List<string> Extensions = [];
-		public VkInstanceCreateFlagBits flags;
+		public List<VkUtf8String> Layers = [];
+		public List<VkUtf8String> Extensions = [];
+		public VkInstanceCreateFlags flags;
 		public List<nint> pNextElements = [];
 
-		public delegate* unmanaged[Cdecl]<VkDebugUtilsMessageSeverityFlagBitsEXT, VkDebugUtilsMessageTypeFlagBitsEXT, VkDebugUtilsMessengerCallbackDataEXT*, void*, int> DebugCallback = &DebugUtility.DefaultDebugCallback;
-		public VkDebugUtilsMessageSeverityFlagBitsEXT DebugMessageSeverity =
-			VkDebugUtilsMessageSeverityFlagBitsEXT.DebugUtilsMessageSeverityWarningBitExt | VkDebugUtilsMessageSeverityFlagBitsEXT.DebugUtilsMessageSeverityErrorBitExt;
-		public VkDebugUtilsMessageTypeFlagBitsEXT DebugMessageType =
-			VkDebugUtilsMessageTypeFlagBitsEXT.DebugUtilsMessageTypeGeneralBitExt | VkDebugUtilsMessageTypeFlagBitsEXT.DebugUtilsMessageTypeValidationBitExt | VkDebugUtilsMessageTypeFlagBitsEXT.DebugUtilsMessageTypePerformanceBitExt;
+		public delegate* unmanaged<VkDebugUtilsMessageSeverityFlagsEXT, VkDebugUtilsMessageTypeFlagsEXT, VkDebugUtilsMessengerCallbackDataEXT*, void*, uint> DebugCallback = &DebugUtility.DefaultDebugCallback;
+		public VkDebugUtilsMessageSeverityFlagsEXT DebugMessageSeverity =
+			VkDebugUtilsMessageSeverityFlagsEXT.Warning | VkDebugUtilsMessageSeverityFlagsEXT.Error;
+		public VkDebugUtilsMessageTypeFlagsEXT DebugMessageType =
+			VkDebugUtilsMessageTypeFlagsEXT.General | VkDebugUtilsMessageTypeFlagsEXT.Validation | VkDebugUtilsMessageTypeFlagsEXT.Performance;
 
 		public void* DebugUserDataPointer;
 

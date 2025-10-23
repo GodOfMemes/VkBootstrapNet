@@ -1,8 +1,9 @@
 ﻿using System.Text;
 using DotNext;
-using OpenTK.Graphics.Vulkan;
+using Vortice.Vulkan;
+using static Vortice.Vulkan.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 public unsafe ref struct PhysicalDeviceSelector {
 	private InstanceInfo _instanceInfo;
@@ -43,13 +44,13 @@ public unsafe ref struct PhysicalDeviceSelector {
 		return selectedDevices;
 	}
 
-	public Result<List<string>> SelectDeviceNames() {
+	public Result<List<VkUtf8String>> SelectDeviceNames() {
 		var selectedDevices = SelectImpl();
 		if(!selectedDevices.IsSuccessful) {
-			return Result.FromException<List<string>>(selectedDevices.Error);
+			return Result.FromException<List<VkUtf8String>>(selectedDevices.Error);
 		}
 		if(selectedDevices.Value.Count == 0) {
-			return Result.FromException<List<string>>(new PhysicalDeviceException(PhysicalDeviceError.NoSuitableDevice));
+			return Result.FromException<List<VkUtf8String>>(new PhysicalDeviceException(PhysicalDeviceError.NoSuitableDevice));
 		}
 
 		return selectedDevices.Value.Select(x => x.Name).ToList();
@@ -101,17 +102,22 @@ public unsafe ref struct PhysicalDeviceSelector {
 		return ref this;
 	}
 
-	public ref PhysicalDeviceSelector AddRequiredExtension(string extension) {
+	public ref PhysicalDeviceSelector AddRequiredExtension(VkUtf8String extension) {
 		_criteria.RequiredExtensions.Add(extension);
 		return ref this;
 	}
-	public ref PhysicalDeviceSelector AddRequiredExtensions(IEnumerable<string> extensions) {
+	public ref PhysicalDeviceSelector AddRequiredExtensions(IEnumerable<VkUtf8String> extensions) {
 		_criteria.RequiredExtensions.AddRange(extensions);
 		return ref this;
 	}
 
 	public ref PhysicalDeviceSelector SetMinimumVersion(uint major, uint minor) {
-		_criteria.RequiredVersion = Vk.MAKE_API_VERSION(0, major, minor, 0);
+		_criteria.RequiredVersion = new(0, major, minor, 0);
+		return ref this;
+	}
+
+	public ref PhysicalDeviceSelector SetMinimumVersion(VkVersion version) {
+		_criteria.RequiredVersion = version;
 		return ref this;
 	}
 
@@ -130,23 +136,25 @@ public unsafe ref struct PhysicalDeviceSelector {
 		return ref this;
 	}
 	public ref PhysicalDeviceSelector SetRequiredFeatures11(VkPhysicalDeviceVulkan11Features features) {
-		features.sType = VkStructureType.StructureTypePhysicalDeviceVulkan11Features;
+		features.sType = VkStructureType.PhysicalDeviceVulkan11Features;
 		AddRequiredExtensionFeatures(features);
 		return ref this;
 	}
 	public ref PhysicalDeviceSelector SetRequiredFeatures12(VkPhysicalDeviceVulkan12Features features) {
-		features.sType = VkStructureType.StructureTypePhysicalDeviceVulkan12Features;
+		features.sType = VkStructureType.PhysicalDeviceVulkan12Features;
 		AddRequiredExtensionFeatures(features);
 		return ref this;
 	}
 	public ref PhysicalDeviceSelector SetRequiredFeatures13(VkPhysicalDeviceVulkan13Features features) {
-		features.sType = VkStructureType.StructureTypePhysicalDeviceVulkan13Features;
+		features.sType = VkStructureType.PhysicalDeviceVulkan13Features;
 		AddRequiredExtensionFeatures(features);
 		return ref this;
 	}
-	//public PhysicalDeviceSelector SetRequiredFeatures14(in VkPhysicalDeviceVulkan14Features features) {
-
-	//}
+	public ref PhysicalDeviceSelector SetRequiredFeatures14(VkPhysicalDeviceVulkan14Features features) {
+		features.sType = VkStructureType.PhysicalDeviceVulkan14Features;
+		AddRequiredExtensionFeatures(features);
+		return ref this;
+	}
 
 	public ref PhysicalDeviceSelector DeferSurfaceInitialization() {
 		_criteria.DeferSurfaceInitialization = true;
@@ -162,6 +170,7 @@ public unsafe ref struct PhysicalDeviceSelector {
 		PhysicalDevice physicalDevice = new() {
 			VkPhysicalDevice = physDevice,
 			Surface = _instanceInfo.Surface,
+			Instance = _instanceInfo.Instance,
 			_deferSurfaceInitialization = _criteria.DeferSurfaceInitialization,
 			_instanceVersion = _instanceInfo.Version
 		};
@@ -170,30 +179,28 @@ public unsafe ref struct PhysicalDeviceSelector {
 
 		ReadFeatures(physDevice, ref physicalDevice);
 
-		physicalDevice.Name = Encoding.UTF8.GetString(physicalDevice.Properties.deviceName);
-		physicalDevice.Name = physicalDevice.Name.Substring(0, physicalDevice.Name.IndexOf('\0'));
+		var prop = physicalDevice.Properties;
+		physicalDevice.Name = new VkUtf8String(prop.deviceName);
 
-		var availableExtensionsRet = Detail.GetVector(out VkExtensionProperties[] availableExtensions, (p1, p2) => Vk.EnumerateDeviceExtensionProperties(physicalDevice, null, (uint*)p1, (VkExtensionProperties*)p2));
+		var availableExtensionsRet = Detail.GetVector(out VkExtensionProperties[] availableExtensions, (p1, p2) => physicalDevice.Instance.InstanceApi.vkEnumerateDeviceExtensionProperties(physicalDevice, null, (uint*)p1, (VkExtensionProperties*)p2));
 		if(availableExtensionsRet != VkResult.Success) {
 			return physicalDevice;
 		}
-		physicalDevice._availableExtensions.AddRange(availableExtensions.Select(x => {
-			string name = Encoding.UTF8.GetString(x.extensionName);
-			name = name.Substring(0, name.IndexOf('\0'));
-			return name;
-		}));
+		physicalDevice._availableExtensions.AddRange(availableExtensions.Select(x => new VkUtf8String(x.extensionName)));
 
 		physicalDevice._properties2ExtEnabled = _instanceInfo.Properties2ExtEnabled;
 
 		var fillChain = srcExtendedFeaturesChain;
 
-		var instanceIs11 = _instanceInfo.Version >= Vk.VK_API_VERSION_1_1;
-		if(fillChain.Nodes.Count > 0 && (instanceIs11 || _instanceInfo.Properties2ExtEnabled)) {
+		var instanceIs11 = _instanceInfo.Version >= VkVersion.Version_1_1;
+		if(fillChain.Nodes.Count > 0 && (instanceIs11 || _instanceInfo.Properties2ExtEnabled))
+		{
+			var instanceApi = physicalDevice.Instance.InstanceApi;
 			fillChain.ChainUp((features) => {
 				if(instanceIs11) {
-					Vk.GetPhysicalDeviceFeatures2(physicalDevice, &features);
+					instanceApi.vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
 				} else {
-					Vk.GetPhysicalDeviceFeatures2KHR(physicalDevice, &features);
+					instanceApi.vkGetPhysicalDeviceFeatures2KHR(physicalDevice, &features);
 				}
 			});
 			physicalDevice._extendedFeaturesChain = fillChain;
@@ -201,36 +208,38 @@ public unsafe ref struct PhysicalDeviceSelector {
 			physicalDevice._extendedFeaturesChain = new GenericFeatureChain();
 		}
 
-			return physicalDevice;
+		return physicalDevice;
 	}
 
 	private static unsafe void ReadFeatures(VkPhysicalDevice physDevice, ref PhysicalDevice physicalDevice) {
 		fixed(VkPhysicalDeviceProperties* propertiesPtr = &physicalDevice.Properties)
 		fixed(VkPhysicalDeviceFeatures* featuresPtr = &physicalDevice.Features)
-		fixed(VkPhysicalDeviceMemoryProperties* memoryPropertiesPtr = &physicalDevice.MemoryProperties) {
-			Vk.GetPhysicalDeviceProperties(physDevice, propertiesPtr);
-			Vk.GetPhysicalDeviceFeatures(physDevice, featuresPtr);
-			Vk.GetPhysicalDeviceMemoryProperties(physDevice, memoryPropertiesPtr);
+		fixed(VkPhysicalDeviceMemoryProperties* memoryPropertiesPtr = &physicalDevice.MemoryProperties) 
+		{
+			physicalDevice.Instance.InstanceApi.vkGetPhysicalDeviceProperties(physDevice, propertiesPtr);
+			physicalDevice.Instance.InstanceApi.vkGetPhysicalDeviceFeatures(physDevice, featuresPtr);
+			physicalDevice.Instance.InstanceApi.vkGetPhysicalDeviceMemoryProperties(physDevice, memoryPropertiesPtr);
 		}
 	}
 
 	private static unsafe void GetQueueFamilyProperties(PhysicalDevice physicalDevice, out VkQueueFamilyProperties[] families) {
-		families = Detail.GetVectorNoError<VkQueueFamilyProperties>((p1, p2) => Vk.GetPhysicalDeviceQueueFamilyProperties(physicalDevice, (uint*)p1, (VkQueueFamilyProperties*)p2));
+		families = Detail.GetVectorNoError<VkQueueFamilyProperties>((p1, p2) => physicalDevice.Instance.InstanceApi.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, (uint*)p1, (VkQueueFamilyProperties*)p2));
 	}
 
 	private readonly unsafe PhysicalDevice.Suitable IsDeviceSuitable(in PhysicalDevice pd) {
 		PhysicalDevice localPd = pd;
+		VkInstanceApi localApi = pd.Instance.InstanceApi;
 		var suitable = PhysicalDevice.Suitable.Yes;
 
-		if(!string.IsNullOrEmpty(_criteria.Name) && _criteria.Name != pd.Name) return PhysicalDevice.Suitable.No;
+		if(!string.IsNullOrEmpty(_criteria.Name) && _criteria.Name != pd.Name.ToString()) return PhysicalDevice.Suitable.No;
 		if(_criteria.RequiredVersion > pd.Properties.apiVersion) return PhysicalDevice.Suitable.No;
 
-		bool dedicatedCompute = Detail.GetDedicatedQueueIndex(pd._queueFamilies, VkQueueFlagBits.QueueComputeBit, VkQueueFlagBits.QueueTransferBit) != uint.MaxValue;
-		bool dedicatedTransfer = Detail.GetDedicatedQueueIndex(pd._queueFamilies, VkQueueFlagBits.QueueTransferBit, VkQueueFlagBits.QueueComputeBit) != uint.MaxValue;
-		bool seperateTransfer = Detail.GetSeperateQueueIndex(pd._queueFamilies, VkQueueFlagBits.QueueTransferBit, VkQueueFlagBits.QueueComputeBit) != uint.MaxValue;
-		bool seperateCompute = Detail.GetSeperateQueueIndex(pd._queueFamilies, VkQueueFlagBits.QueueComputeBit, VkQueueFlagBits.QueueTransferBit) != uint.MaxValue;
+		bool dedicatedCompute = Detail.GetDedicatedQueueIndex(pd._queueFamilies, VkQueueFlags.Compute, VkQueueFlags.Transfer) != uint.MaxValue;
+		bool dedicatedTransfer = Detail.GetDedicatedQueueIndex(pd._queueFamilies, VkQueueFlags.Transfer, VkQueueFlags.Compute) != uint.MaxValue;
+		bool seperateTransfer = Detail.GetSeperateQueueIndex(pd._queueFamilies, VkQueueFlags.Transfer, VkQueueFlags.Compute) != uint.MaxValue;
+		bool seperateCompute = Detail.GetSeperateQueueIndex(pd._queueFamilies, VkQueueFlags.Compute, VkQueueFlags.Transfer) != uint.MaxValue;
 
-		bool presentQueue = Detail.GetPresentQueueIndex(pd, _instanceInfo.Surface, pd._queueFamilies) != uint.MaxValue;
+		bool presentQueue = Detail.GetPresentQueueIndex(pd.Instance, pd, _instanceInfo.Surface, pd._queueFamilies) != uint.MaxValue;
 
 		if(_criteria.RequireDedicatedComputeQueue && !dedicatedCompute) return PhysicalDevice.Suitable.No;
 		if(_criteria.RequireDedicatedTransferQueue && !dedicatedTransfer) return PhysicalDevice.Suitable.No;
@@ -242,9 +251,10 @@ public unsafe ref struct PhysicalDeviceSelector {
 			return PhysicalDevice.Suitable.No;
 		}
 
-		if(!_criteria.DeferSurfaceInitialization && _criteria.RequirePresent) {
-			var formatsRet = Detail.GetVector(out VkSurfaceFormatKHR[] formats, (p1, p2) => Vk.GetPhysicalDeviceSurfaceFormatsKHR(localPd, localPd.Surface, (uint*)p1, (VkSurfaceFormatKHR*)p2));
-			var presentModesRet = Detail.GetVector(out VkPresentModeKHR[] presentModes, (p1, p2) => Vk.GetPhysicalDeviceSurfacePresentModesKHR(localPd, localPd.Surface, (uint*)p1, (VkPresentModeKHR*)p2));
+		if(!_criteria.DeferSurfaceInitialization && _criteria.RequirePresent) 
+		{
+			var formatsRet = Detail.GetVector(out VkSurfaceFormatKHR[] formats, (p1, p2) => localApi.vkGetPhysicalDeviceSurfaceFormatsKHR(localPd, localPd.Surface, (uint*)p1, (VkSurfaceFormatKHR*)p2));
+			var presentModesRet = Detail.GetVector(out VkPresentModeKHR[] presentModes, (p1, p2) => localApi.vkGetPhysicalDeviceSurfacePresentModesKHR(localPd, localPd.Surface, (uint*)p1, (VkPresentModeKHR*)p2));
 		
 			if(formatsRet != VkResult.Success || presentModesRet != VkResult.Success || formats.Length == 0 || presentModes.Length == 0) {
 				return PhysicalDevice.Suitable.No;
@@ -261,7 +271,7 @@ public unsafe ref struct PhysicalDeviceSelector {
 		}
 
 		for(int i = 0; i < pd.MemoryProperties.memoryHeapCount; i++) {
-			if((pd.MemoryProperties.memoryHeaps[i].flags & VkMemoryHeapFlagBits.MemoryHeapDeviceLocalBit) != 0) {
+			if((pd.MemoryProperties.memoryHeaps[i].flags & VkMemoryHeapFlags.DeviceLocal) != 0) {
 				if(pd.MemoryProperties.memoryHeaps[i].size < _criteria.RequiredMemSize) {
 					return PhysicalDevice.Suitable.No;
 				}
@@ -273,14 +283,14 @@ public unsafe ref struct PhysicalDeviceSelector {
 
 	private unsafe Result<List<PhysicalDevice>> SelectImpl() {
 		if(_criteria.RequirePresent && !_criteria.DeferSurfaceInitialization) {
-			if(_instanceInfo.Surface == default) {
+			if(_instanceInfo.Surface.IsNull) {
 				return Result.FromException<List<PhysicalDevice>>(new PhysicalDeviceException(PhysicalDeviceError.NoSurfaceProvided));
 			}
 		}
 
 		VkInstance instance = _instanceInfo.Instance;
-
-		var vkPhysicalDevicesRet = Detail.GetVector(out VkPhysicalDevice[] vkPhysicalDevices, (p1, p2) => Vk.EnumeratePhysicalDevices(instance, (uint*)p1, (VkPhysicalDevice*)p2));
+		var instanceApi = _instanceInfo.Instance.InstanceApi;
+		var vkPhysicalDevicesRet = Detail.GetVector(out VkPhysicalDevice[] vkPhysicalDevices, (p1, p2) => instanceApi.vkEnumeratePhysicalDevices(instance, (uint*)p1, (VkPhysicalDevice*)p2));
 		if(vkPhysicalDevicesRet != VkResult.Success) {
 			return Result.FromException<List<PhysicalDevice>>(new PhysicalDeviceException(PhysicalDeviceError.FailedEnumeratePhysicalDevices, new VkException(vkPhysicalDevicesRet)));
 		}
@@ -293,14 +303,15 @@ public unsafe ref struct PhysicalDeviceSelector {
 			physDev._extendedFeaturesChain = self._criteria.ExtendedFeaturesChain;
 			bool portabilityExtAvailable = false;
 			foreach(var item in physDev._availableExtensions) {
-				if(self._criteria.EnablePortabilitySubset && item == "VK_KHR_portability_subset") {
+				if(self._criteria.EnablePortabilitySubset && item == VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) 
+				{
 					portabilityExtAvailable = true;
 				}
 			}
 
 			physDev._extensionsToEnable = self._criteria.RequiredExtensions.ToList();
 			if(portabilityExtAvailable) {
-				physDev._extensionsToEnable.Add("VK_KHR_portability_subset");
+				physDev._extensionsToEnable.Add(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 			}
 		}
 
@@ -331,9 +342,9 @@ public unsafe ref struct PhysicalDeviceSelector {
 	}
 
 	struct InstanceInfo {
-		public VkInstance Instance;
+		public Instance Instance;
 		public VkSurfaceKHR Surface;
-		public uint Version;
+		public VkVersion Version;
 		public bool Headless;
 		public bool Properties2ExtEnabled;
 	}
@@ -349,9 +360,9 @@ public unsafe ref struct PhysicalDeviceSelector {
 		public bool RequireSeperateComputeQueue = false;
 		public ulong RequiredMemSize = 0;
 
-		public List<string> RequiredExtensions = [];
+		public List<VkUtf8String> RequiredExtensions = [];
 
-		public uint RequiredVersion = Vk.VK_API_VERSION_1_0;
+		public VkVersion RequiredVersion = VkVersion.Version_1_0;
 
 		public VkPhysicalDeviceFeatures RequiredFeatures;
 		public VkPhysicalDeviceFeatures2 RequiredFeatures2;

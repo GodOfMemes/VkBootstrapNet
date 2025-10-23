@@ -1,5 +1,6 @@
-﻿using Fuchsium.VkBootstrapNet;
-using OpenTK.Graphics.Vulkan;
+﻿using VkBootstrapNet;
+using Vortice.Vulkan;
+using static Vortice.Vulkan.Vulkan;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
 namespace Triangle;
@@ -55,7 +56,7 @@ internal unsafe class Program {
 	}
 
 	static VkSurfaceKHR CreateSurfaceGlfw(VkInstance instance, Window* window, VkAllocationCallbacks* allocator = null) {
-		VkResult err = (VkResult)GLFW.CreateWindowSurface(new VkHandle(instance.Handle), window, allocator, out VkHandle surfaceHandle);
+		VkResult err = (VkResult)GLFW.CreateWindowSurface(new VkHandle((ulong)instance.Handle), window, allocator, out VkHandle surfaceHandle);
 		if(err != VkResult.Success) {
 			ErrorCode ret = GLFW.GetError(out string error);
 			if(ret != ErrorCode.NoError) {
@@ -94,7 +95,7 @@ internal unsafe class Program {
 		}
 		PhysicalDevice physicalDevice = physDeviceRet.Value;
 
-		DeviceBuilder deviceBuilder = new(physicalDevice);
+		DeviceBuilder deviceBuilder = new(init.Instance,physicalDevice);
 		var deviceRet = deviceBuilder.Build();
 		if(!deviceRet.IsSuccessful) {
 			Console.WriteLine(deviceRet.Error);
@@ -112,7 +113,7 @@ internal unsafe class Program {
 			Console.WriteLine(swapRet.Error);
 			return -1;
 		}
-		if(init.Swapchain.VkSwapchain != default) {
+		if(init.Swapchain.VkSwapchain.IsNotNull) {
 			init.Swapchain.Dispose();
 		}
 		init.Swapchain = swapRet.Value;
@@ -139,33 +140,33 @@ internal unsafe class Program {
 	static int CreateRenderPass(ref Init init, ref RenderData renderData) {
 		VkAttachmentDescription colorAttachment = new() {
 			format = init.Swapchain.ImageFormat,
-			samples = VkSampleCountFlagBits.SampleCount1Bit,
-			loadOp = VkAttachmentLoadOp.AttachmentLoadOpClear,
-			storeOp = VkAttachmentStoreOp.AttachmentStoreOpStore,
-			stencilLoadOp = VkAttachmentLoadOp.AttachmentLoadOpDontCare,
-			stencilStoreOp = VkAttachmentStoreOp.AttachmentStoreOpDontCare,
-			initialLayout = VkImageLayout.ImageLayoutUndefined,
-			finalLayout = VkImageLayout.ImageLayoutUndefined
+			samples = VkSampleCountFlags.Count1,
+			loadOp = VkAttachmentLoadOp.Clear,
+			storeOp = VkAttachmentStoreOp.Store,
+			stencilLoadOp = VkAttachmentLoadOp.DontCare,
+			stencilStoreOp = VkAttachmentStoreOp.DontCare,
+			initialLayout = VkImageLayout.Undefined,
+			finalLayout = VkImageLayout.PresentSrcKHR
 		};
 
 		VkAttachmentReference colorAttachmentRef = new() {
 			attachment = 0,
-			layout = VkImageLayout.ImageLayoutColorAttachmentOptimal
+			layout = VkImageLayout.ColorAttachmentOptimal
 		};
 
 		VkSubpassDescription subpass = new() {
-			pipelineBindPoint = VkPipelineBindPoint.PipelineBindPointGraphics,
+			pipelineBindPoint = VkPipelineBindPoint.Graphics,
 			colorAttachmentCount = 1,
 			pColorAttachments = &colorAttachmentRef
 		};
 
 		VkSubpassDependency dependency = new() {
-			srcSubpass = Vk.SubpassExternal,
+			srcSubpass = VK_SUBPASS_EXTERNAL,
 			dstSubpass = 0,
-			srcStageMask = VkPipelineStageFlagBits.PipelineStageColorAttachmentOutputBit,
+			srcStageMask = VkPipelineStageFlags.ColorAttachmentOutput,
 			srcAccessMask = 0,
-			dstStageMask = VkPipelineStageFlagBits.PipelineStageColorAttachmentOutputBit,
-			dstAccessMask = VkAccessFlagBits.AccessColorAttachmentReadBit | VkAccessFlagBits.AccessColorAttachmentWriteBit
+			dstStageMask = VkPipelineStageFlags.ColorAttachmentOutput,
+			dstAccessMask = VkAccessFlags.ColorAttachmentRead | VkAccessFlags.ColorAttachmentWrite
 		};
 
 		VkRenderPassCreateInfo renderPassInfo = new() {
@@ -177,8 +178,9 @@ internal unsafe class Program {
 			pDependencies = &dependency
 		};
 
-		fixed(VkRenderPass* pPass = &renderData.RenderPass) {
-			if(Vk.CreateRenderPass(init.Device, &renderPassInfo, null, pPass) != VkResult.Success) {
+		fixed(VkRenderPass* pPass = &renderData.RenderPass) 
+		{
+			if(init.Device.DeviceApi.vkCreateRenderPass(init.Device, &renderPassInfo, null, pPass) != VkResult.Success) {
 				Console.WriteLine("failed to create render pass");
 				return -1;
 			}
@@ -194,7 +196,7 @@ internal unsafe class Program {
 			};
 
 			VkShaderModule shaderModule;
-			if(Vk.CreateShaderModule(init.Device, &createInfo, null, &shaderModule) != VkResult.Success) {
+			if(init.Device.DeviceApi.vkCreateShaderModule(init.Device, &createInfo, null, &shaderModule) != VkResult.Success) {
 				return default;
 			}
 
@@ -208,21 +210,21 @@ internal unsafe class Program {
 
 		VkShaderModule vertModule = CreateShaderModule(ref init, vertCode);
 		VkShaderModule fragModule = CreateShaderModule(ref init, fragCode);
-		if(vertModule == default || fragModule == default) {
+		if(vertModule.IsNull || fragModule.IsNull) {
 			Console.WriteLine("failed to create shader modules");
 			return -1;
 		}
 
-		using NativeString main = (NativeString)"main";
+		VkUtf8ReadOnlyString main = "main"u8;
 
 		VkPipelineShaderStageCreateInfo vertStageInfo = new() {
-			stage = VkShaderStageFlagBits.ShaderStageVertexBit,
+			stage = VkShaderStageFlags.Vertex,
 			module = vertModule,
 			pName = main
 		};
 
 		VkPipelineShaderStageCreateInfo fragStageInfo = new() {
-			stage = VkShaderStageFlagBits.ShaderStageFragmentBit,
+			stage = VkShaderStageFlags.Fragment,
 			module = fragModule,
 			pName = main
 		};
@@ -235,8 +237,8 @@ internal unsafe class Program {
 		};
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssembly = new() {
-			topology = VkPrimitiveTopology.PrimitiveTopologyTriangleList,
-			primitiveRestartEnable = 0
+			topology = VkPrimitiveTopology.TriangleList,
+			primitiveRestartEnable = false
 		};
 
 		VkViewport viewport = new() {
@@ -256,32 +258,32 @@ internal unsafe class Program {
 		};
 
 		VkPipelineRasterizationStateCreateInfo rasterizer = new() {
-			depthClampEnable = 0,
-			rasterizerDiscardEnable = 0,
-			polygonMode = VkPolygonMode.PolygonModeFill,
+			depthClampEnable = false,
+			rasterizerDiscardEnable = false,
+			polygonMode = VkPolygonMode.Fill,
 			lineWidth = 1f,
-			cullMode = VkCullModeFlagBits.CullModeBackBit,
-			frontFace = VkFrontFace.FrontFaceClockwise,
-			depthBiasEnable = 0
+			cullMode = VkCullModeFlags.Back,
+			frontFace = VkFrontFace.Clockwise,
+			depthBiasEnable = false
 		};
 
 		VkPipelineMultisampleStateCreateInfo multisampling = new() {
-			sampleShadingEnable = 0,
-			rasterizationSamples = VkSampleCountFlagBits.SampleCount1Bit
+			sampleShadingEnable = false,
+			rasterizationSamples = VkSampleCountFlags.Count1
 		};
 
 		VkPipelineColorBlendAttachmentState colorBlendAttachment = new() {
 			colorWriteMask =
-				VkColorComponentFlagBits.ColorComponentRBit
-				| VkColorComponentFlagBits.ColorComponentGBit
-				| VkColorComponentFlagBits.ColorComponentGBit
-				| VkColorComponentFlagBits.ColorComponentABit,
-			blendEnable = 0
+				VkColorComponentFlags.R
+				| VkColorComponentFlags.G
+				| VkColorComponentFlags.B
+				| VkColorComponentFlags.A,
+			blendEnable = false
 		};
 
 		VkPipelineColorBlendStateCreateInfo colorBlending = new() {
-			logicOpEnable = 0,
-			logicOp = VkLogicOp.LogicOpCopy,
+			logicOpEnable = false,
+			logicOp = VkLogicOp.Copy,
 			attachmentCount = 1,
 			pAttachments = &colorBlendAttachment,
 		};
@@ -296,13 +298,13 @@ internal unsafe class Program {
 		};
 
 		fixed(VkPipelineLayout* pPipelineLayout = &data.PipelineLayout) {
-			if(Vk.CreatePipelineLayout(init.Device, &pipelineLayoutInfo, null, pPipelineLayout) != VkResult.Success) {
+			if(init.Device.DeviceApi.vkCreatePipelineLayout(init.Device, &pipelineLayoutInfo, null, pPipelineLayout) != VkResult.Success) {
 				Console.WriteLine("failed to create pipeline layout");
 				return -1;
 			}
 		}
 
-		var dynamicStates = stackalloc VkDynamicState[] { VkDynamicState.DynamicStateViewport, VkDynamicState.DynamicStateScissor };
+		var dynamicStates = stackalloc VkDynamicState[] { VkDynamicState.Viewport, VkDynamicState.Scissor };
 
 		VkPipelineDynamicStateCreateInfo dynamicInfo = new() {
 			dynamicStateCount = 2,
@@ -326,14 +328,14 @@ internal unsafe class Program {
 		};
 
 		fixed(VkPipeline* pPipeline = &data.GraphicsPipeline) {
-			if(Vk.CreateGraphicsPipelines(init.Device, default, 1, &pipelineInfo, null, pPipeline) != VkResult.Success) {
+			if(init.Device.DeviceApi.vkCreateGraphicsPipelines(init.Device, default, 1, &pipelineInfo, null, pPipeline) != VkResult.Success) {
 				Console.WriteLine("failed to create pipeline");
 				return -1;
 			}
 		}
 
-		Vk.DestroyShaderModule(init.Device, vertModule, null);
-		Vk.DestroyShaderModule(init.Device, fragModule, null);
+		init.Device.DeviceApi.vkDestroyShaderModule(init.Device, vertModule, null);
+		init.Device.DeviceApi.vkDestroyShaderModule(init.Device, fragModule, null);
 		return 0;
 	}
 
@@ -356,7 +358,7 @@ internal unsafe class Program {
 			};
 
 			fixed(VkFramebuffer* pFramebuffer = &data.Framebuffers[i]) {
-				if(Vk.CreateFramebuffer(init.Device, &framebufferInfo, null, pFramebuffer) != VkResult.Success) {
+				if(init.Device.DeviceApi.vkCreateFramebuffer(init.Device, &framebufferInfo, null, pFramebuffer) != VkResult.Success) {
 					return -1;
 				}
 			}
@@ -370,7 +372,7 @@ internal unsafe class Program {
 		};
 
 		fixed(VkCommandPool* pCommandPool = &data.CommandPool) {
-			if(Vk.CreateCommandPool(init.Device, &poolInfo, null, pCommandPool) != VkResult.Success) {
+			if(init.Device.DeviceApi.vkCreateCommandPool(init.Device, &poolInfo, null, pCommandPool) != VkResult.Success) {
 				Console.WriteLine("failed to create command pool");
 				return -1;
 			}
@@ -383,19 +385,19 @@ internal unsafe class Program {
 
 		VkCommandBufferAllocateInfo allocInfo = new() {
 			commandPool = data.CommandPool,
-			level = VkCommandBufferLevel.CommandBufferLevelPrimary,
+			level = VkCommandBufferLevel.Primary,
 			commandBufferCount = (uint)data.CommandBuffers.Length
 		};
 
 		fixed(VkCommandBuffer* pCommandBuffers = data.CommandBuffers) {
-			if(Vk.AllocateCommandBuffers(init.Device, &allocInfo, pCommandBuffers) != VkResult.Success) {
+			if(init.Device.DeviceApi.vkAllocateCommandBuffers(init.Device, &allocInfo, pCommandBuffers) != VkResult.Success) {
 				return -1;
 			}
 		}
 
 		for(int i=0; i<data.CommandBuffers.Length; i++) {
 			VkCommandBufferBeginInfo beginInfo = new();
-			if(Vk.BeginCommandBuffer(data.CommandBuffers[i], &beginInfo) != VkResult.Success) {
+			if(init.Device.DeviceApi.vkBeginCommandBuffer(data.CommandBuffers[i], &beginInfo) != VkResult.Success) {
 				return -1;
 			}
 
@@ -417,18 +419,18 @@ internal unsafe class Program {
 
 			VkRect2D scissor = new(new VkOffset2D(), init.Swapchain.Extent);
 
-			Vk.CmdSetViewport(data.CommandBuffers[i], 0, 1, &viewport);
-			Vk.CmdSetScissor(data.CommandBuffers[i], 0, 1, &scissor);
+			init.Device.DeviceApi.vkCmdSetViewport(data.CommandBuffers[i], 0, 1, &viewport);
+			init.Device.DeviceApi.vkCmdSetScissor(data.CommandBuffers[i], 0, 1, &scissor);
 
-			Vk.CmdBeginRenderPass(data.CommandBuffers[i], &renderPassInfo, VkSubpassContents.SubpassContentsInline);
+			init.Device.DeviceApi.vkCmdBeginRenderPass(data.CommandBuffers[i], &renderPassInfo, VkSubpassContents.Inline);
 
-			Vk.CmdBindPipeline(data.CommandBuffers[i], VkPipelineBindPoint.PipelineBindPointGraphics, data.GraphicsPipeline);
+			init.Device.DeviceApi.vkCmdBindPipeline(data.CommandBuffers[i], VkPipelineBindPoint.Graphics, data.GraphicsPipeline);
 
-			Vk.CmdDraw(data.CommandBuffers[i], 3, 1, 0, 0);
+			init.Device.DeviceApi.vkCmdDraw(data.CommandBuffers[i], 3, 1, 0, 0);
 
-			Vk.CmdEndRenderPass(data.CommandBuffers[i]);
+			init.Device.DeviceApi.vkCmdEndRenderPass(data.CommandBuffers[i]);
 
-			if(Vk.EndCommandBuffer(data.CommandBuffers[i]) != VkResult.Success) {
+			if(init.Device.DeviceApi.vkEndCommandBuffer(data.CommandBuffers[i]) != VkResult.Success) {
 				Console.WriteLine("failed to record command buffer");
 				return -1;
 			}
@@ -445,16 +447,16 @@ internal unsafe class Program {
 		VkSemaphoreCreateInfo semaphoreInfo = new();
 
 		VkFenceCreateInfo fenceInfo = new() {
-			flags = VkFenceCreateFlagBits.FenceCreateSignaledBit
+			flags = VkFenceCreateFlags.Signaled
 		};
 
 		for(int i=0; i<MaxFramesInFlight; i++) {
 			fixed(VkSemaphore* pAvailableSemaphore = &data.AvailableSemaphores[i])
 			fixed(VkSemaphore* pFinishedSemaphore = &data.FinishedSemaphore[i])
 			fixed(VkFence* pFence = &data.InFlightFences[i]) {
-				if(Vk.CreateSemaphore(init.Device, &semaphoreInfo, null, pAvailableSemaphore) != VkResult.Success
-					|| Vk.CreateSemaphore(init.Device, &semaphoreInfo, null, pFinishedSemaphore) != VkResult.Success
-					|| Vk.CreateFence(init.Device, &fenceInfo, null, pFence) != VkResult.Success) {
+				if(init.Device.DeviceApi.vkCreateSemaphore(init.Device, &semaphoreInfo, null, pAvailableSemaphore) != VkResult.Success
+					|| init.Device.DeviceApi.vkCreateSemaphore(init.Device, &semaphoreInfo, null, pFinishedSemaphore) != VkResult.Success
+					|| init.Device.DeviceApi.vkCreateFence(init.Device, &fenceInfo, null, pFence) != VkResult.Success) {
 					Console.WriteLine("failed to create sync objects");
 					return -1;
 				}
@@ -464,12 +466,12 @@ internal unsafe class Program {
 	}
 
 	static int RecreateSwapchain(ref Init init, ref RenderData data) {
-		Vk.DeviceWaitIdle(init.Device);
+		init.Device.DeviceApi.vkDeviceWaitIdle(init.Device);
 
-		Vk.DestroyCommandPool(init.Device, data.CommandPool, null);
+		init.Device.DeviceApi.vkDestroyCommandPool(init.Device, data.CommandPool, null);
 
 		foreach(var framebuffer in data.Framebuffers) {
-			Vk.DestroyFramebuffer(init.Device, framebuffer, null);
+			init.Device.DeviceApi.vkDestroyFramebuffer(init.Device, framebuffer, null);
 		}
 
 		init.Swapchain.DestroyImageViews(data.SwapchainImageViews);
@@ -484,28 +486,28 @@ internal unsafe class Program {
 
 	static int DrawFrame(ref Init init, ref RenderData data) {
 		VkFence fence = data.InFlightFences[data.CurrentFrame];
-		Vk.WaitForFences(init.Device, 1, &fence, 1, ulong.MaxValue);
+		init.Device.DeviceApi.vkWaitForFences(init.Device, 1, &fence, true, ulong.MaxValue);
 
 		uint imageIndex = 0;
-		VkResult result = Vk.AcquireNextImageKHR(init.Device, init.Swapchain, ulong.MaxValue, data.AvailableSemaphores[data.CurrentFrame], default, &imageIndex);
+		VkResult result = init.Device.DeviceApi.vkAcquireNextImageKHR(init.Device, init.Swapchain, ulong.MaxValue, data.AvailableSemaphores[data.CurrentFrame], default, &imageIndex);
 
-		if(result == VkResult.ErrorOutOfDateKhr) {
+		if(result == VkResult.ErrorOutOfDateKHR) {
 			return RecreateSwapchain(ref init, ref data);
-		} else if(result != VkResult.Success && result != VkResult.SuboptimalKhr) {
+		} else if(result != VkResult.Success && result != VkResult.SuboptimalKHR) {
 			Console.WriteLine("failed to acquire swapchain image. Error " + result);
 			return -1;
 		}
 
-		if(data.ImageInFlight[imageIndex] != default) {
-			VkFence fence2 = data.InFlightFences[imageIndex];
-			Vk.WaitForFences(init.Device, 1, &fence2, 1, ulong.MaxValue);
+		if(data.ImageInFlight[imageIndex].IsNotNull) {
+			VkFence fence2 = data.InFlightFences[data.CurrentFrame];
+			init.Device.DeviceApi.vkWaitForFences(init.Device, 1, &fence2, true, ulong.MaxValue);
 		}
 		data.ImageInFlight[imageIndex] = data.InFlightFences[data.CurrentFrame];
 
 		VkSubmitInfo submitInfo = new();
 
 		VkSemaphore waitSemaphore = data.AvailableSemaphores[data.CurrentFrame];
-		VkPipelineStageFlagBits waitStage = VkPipelineStageFlagBits.PipelineStageColorAttachmentOutputBit;
+		VkPipelineStageFlags waitStage = VkPipelineStageFlags.ColorAttachmentOutput;
 		submitInfo.waitSemaphoreCount = 1;
 		submitInfo.pWaitSemaphores = &waitSemaphore;
 		submitInfo.pWaitDstStageMask = &waitStage;
@@ -519,9 +521,9 @@ internal unsafe class Program {
 		submitInfo.pSignalSemaphores = signal_semaphores;
 
 		VkFence inFlightFence = data.InFlightFences[data.CurrentFrame];
-		Vk.ResetFences(init.Device, 1, &inFlightFence);
+		init.Device.DeviceApi.vkResetFences(init.Device, 1, &inFlightFence);
 
-		if(Vk.QueueSubmit(data.GraphicsQueue, 1, &submitInfo, inFlightFence) != VkResult.Success) {
+		if(init.Device.DeviceApi.vkQueueSubmit(data.GraphicsQueue, 1, &submitInfo, inFlightFence) != VkResult.Success) {
 			Console.WriteLine("failed to submit draw command buffer");
 			return -1;
 		}
@@ -537,8 +539,8 @@ internal unsafe class Program {
 
 		presentInfo.pImageIndices = &imageIndex;
 
-		result = Vk.QueuePresentKHR(data.PresentQueue, &presentInfo);
-		if(result == VkResult.ErrorOutOfDateKhr || result == VkResult.SuboptimalKhr) {
+		result = init.Device.DeviceApi.vkQueuePresentKHR(data.PresentQueue, &presentInfo);
+		if(result == VkResult.ErrorOutOfDateKHR || result == VkResult.SuboptimalKHR) {
 			return RecreateSwapchain(ref init, ref data);
 		} else if(result != VkResult.Success) {
 			Console.WriteLine("failed to present swapchain image");
@@ -551,26 +553,26 @@ internal unsafe class Program {
 
 	static void Cleanup(ref Init init, ref RenderData data) {
 		for(int i=0; i<MaxFramesInFlight; i++) {
-			Vk.DestroySemaphore(init.Device, data.FinishedSemaphore[i], null);
-			Vk.DestroySemaphore(init.Device, data.AvailableSemaphores[i], null);
-			Vk.DestroyFence(init.Device, data.InFlightFences[i], null);
+			init.Device.DeviceApi.vkDestroySemaphore(init.Device, data.FinishedSemaphore[i], null);
+			init.Device.DeviceApi.vkDestroySemaphore(init.Device, data.AvailableSemaphores[i], null);
+			init.Device.DeviceApi.vkDestroyFence(init.Device, data.InFlightFences[i], null);
 		}
 
-		Vk.DestroyCommandPool(init.Device, data.CommandPool, null);
+		init.Device.DeviceApi.vkDestroyCommandPool(init.Device, data.CommandPool, null);
 
 		foreach(var framebuffer in data.Framebuffers) {
-			Vk.DestroyFramebuffer(init.Device, framebuffer, null);
+			init.Device.DeviceApi.vkDestroyFramebuffer(init.Device, framebuffer, null);
 		}
 
-		Vk.DestroyPipeline(init.Device, data.GraphicsPipeline, null);
-		Vk.DestroyPipelineLayout(init.Device, data.PipelineLayout, null);
-		Vk.DestroyRenderPass(init.Device, data.RenderPass, null);
+		init.Device.DeviceApi.vkDestroyPipeline(init.Device, data.GraphicsPipeline, null);
+		init.Device.DeviceApi.vkDestroyPipelineLayout(init.Device, data.PipelineLayout, null);
+		init.Device.DeviceApi.vkDestroyRenderPass(init.Device, data.RenderPass, null);
 
 		init.Swapchain.DestroyImageViews(data.SwapchainImageViews);
 
 		init.Swapchain.Dispose();
 		init.Device.Dispose();
-		Vk.DestroySurfaceKHR(init.Instance, init.Surface, null);
+		init.Instance.InstanceApi.vkDestroySurfaceKHR(init.Instance, init.Surface, null);
 		init.Instance.Dispose();
 		DestroyWindowGlfw(init.Window);
 	}
@@ -597,7 +599,7 @@ internal unsafe class Program {
 				return -1;
 			}
 		}
-		Vk.DeviceWaitIdle(init.Device);
+		init.Device.DeviceApi.vkDeviceWaitIdle(init.Device);
 
 		Cleanup(ref init, ref renderData);
 		return 0;

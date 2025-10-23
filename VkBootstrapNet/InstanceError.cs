@@ -1,6 +1,4 @@
-﻿using Fuchsium.VkBootstrapNet;
-
-namespace Fuchsium.VkBootstrapNet;
+﻿namespace VkBootstrapNet;
 
 public enum InstanceError {
 	VulkanUnavailable,

@@ -1,15 +1,18 @@
 ﻿using System.Runtime.InteropServices;
 using DotNext;
-using OpenTK.Graphics.Vulkan;
+using Vortice.Vulkan;
+using static Vortice.Vulkan.Vulkan;
 
-namespace Fuchsium.VkBootstrapNet;
+namespace VkBootstrapNet;
 
 public ref struct DeviceBuilder {
 	private PhysicalDevice _physicalDevice;
+	private Instance _instance; 
 	private DeviceInfo _info = new();
 
-	public DeviceBuilder(PhysicalDevice physicalDevice) {
+	public DeviceBuilder(Instance instance, PhysicalDevice physicalDevice) {
 		_physicalDevice = physicalDevice;
+		_instance = instance;
 	}
 
 	public unsafe Result<Device> Build() {
@@ -37,9 +40,9 @@ public ref struct DeviceBuilder {
 				});
 			}
 
-			List<string> extensionsToEnable = _physicalDevice._extensionsToEnable.ToList();
-			if(_physicalDevice.Surface != default || _physicalDevice._deferSurfaceInitialization) {
-				extensionsToEnable.Add(Vk.KhrSwapchainExtensionName);
+			List<VkUtf8String> extensionsToEnable = [.._physicalDevice._extensionsToEnable];
+			if(_physicalDevice.Surface.IsNotNull || _physicalDevice._deferSurfaceInitialization) {
+				extensionsToEnable.Add(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 			}
 
 			List<nint> finalPNextChain = [];
@@ -48,7 +51,7 @@ public ref struct DeviceBuilder {
 			bool userDefinedPhysDevFeatures2 = false;
 			foreach(var pnext in _info.PNextChain) {
 				VkBaseOutStructure* pNext = (VkBaseOutStructure*)pnext;
-				if(pNext->sType == VkStructureType.StructureTypePhysicalDeviceFeatures2) {
+				if(pNext->sType == VkStructureType.PhysicalDeviceFeatures2) {
 					userDefinedPhysDevFeatures2 = true;
 					break;
 				}
@@ -60,10 +63,10 @@ public ref struct DeviceBuilder {
 
 			var physicalDeviceExtensionFeaturesCopy = _physicalDevice._extendedFeaturesChain.Clone();
 			VkPhysicalDeviceFeatures2 localFeatures2 = new();
-			localFeatures2.sType = VkStructureType.StructureTypePhysicalDeviceFeatures2;
+			localFeatures2.sType = VkStructureType.PhysicalDeviceFeatures2;
 			localFeatures2.features = _physicalDevice.Features;
 			if(!userDefinedPhysDevFeatures2) {
-				if(_physicalDevice._instanceVersion >= Vk.VK_API_VERSION_1_1 || _physicalDevice._properties2ExtEnabled) {
+				if(_physicalDevice._instanceVersion >= VkVersion.Version_1_1 || _physicalDevice._properties2ExtEnabled) {
 					GCHandle pLocalFeatures2 = GCHandle.Alloc(localFeatures2, GCHandleType.Pinned);
 					handles.Add(pLocalFeatures2);
 
@@ -96,18 +99,20 @@ public ref struct DeviceBuilder {
 				deviceCreateInfo.pQueueCreateInfos = pQueueCreateInfos;
 
 				deviceCreateInfo.enabledExtensionCount = (uint)extensionsToEnable.Count;
-				using NativeStringArray enabledExtensionNames = NativeStringArray.Create(extensionsToEnable.ToArray());
-				deviceCreateInfo.ppEnabledExtensionNames = (byte**)enabledExtensionNames.Address;
+        		using var enabledExtensionNames = new VkStringArray(extensionsToEnable);
+				deviceCreateInfo.ppEnabledExtensionNames = enabledExtensionNames;
 
 				Device device = new();
 
 				VkDeviceCreateInfo ciCopy = deviceCreateInfo;
 
-				VkResult res = Vk.CreateDevice(physicalDevice.VkPhysicalDevice, &ciCopy, allocator, &device.VkDevice);
+				VkResult res = _instance.InstanceApi.vkCreateDevice(physicalDevice.VkPhysicalDevice, &ciCopy, allocator, &device.VkDevice);
 				if(res != VkResult.Success) {
 					return Result.FromException<Device>(new DeviceException(DeviceError.FailedCreateDevice, new VkException(res)));
 				}
 
+				device.DeviceApi = GetApi(_instance.VkInstance, device.VkDevice);
+        		device.Instance = _instance;
 				device.PhysicalDevice = physicalDevice;
 				device.Surface = physicalDevice.Surface;
 				device.QueueFamilies = physicalDevice._queueFamilies;

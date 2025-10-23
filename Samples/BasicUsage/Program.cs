@@ -1,5 +1,5 @@
-﻿using Fuchsium.VkBootstrapNet;
-using OpenTK.Graphics.Vulkan;
+﻿using VkBootstrapNet;
+using Vortice.Vulkan;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
 namespace BasicUsage;
@@ -10,6 +10,7 @@ internal class Program {
 		var instRet = builder
 			.SetAppName("Example Vulkan Application")
 			.RequestValidationLayers()
+			.RequireApiVersion(VkVersion.Version_1_3)
 			.UseDefaultDebugMessenger()
 			.Build();
 		if(!instRet.IsSuccessful) {
@@ -22,7 +23,7 @@ internal class Program {
 		GLFW.WindowHint(WindowHintClientApi.ClientApi, ClientApi.NoApi);
 		Window* window = GLFW.CreateWindow(1024, 1024, "Vulkan Triangle", null, null);
 
-		VkResult glfwResult = (VkResult)GLFW.CreateWindowSurface(new VkHandle(inst.VkInstance.Handle), window, null, out VkHandle surfaceHandle);
+		VkResult glfwResult = (VkResult)GLFW.CreateWindowSurface(new VkHandle((ulong)inst.VkInstance.Handle), window, null, out VkHandle surfaceHandle);
 		if(glfwResult != VkResult.Success) {
 			Console.WriteLine(glfwResult);
 			return false;
@@ -36,7 +37,7 @@ internal class Program {
 			return false;
 		}
 
-		DeviceBuilder deviceBuilder = new(physRet.Value);
+		DeviceBuilder deviceBuilder = new(inst, physRet.Value);
 		// automatically propagate needed data from instance & physical device
 		var devRet = deviceBuilder.Build();
 		if(!devRet.IsSuccessful) {
@@ -66,7 +67,7 @@ internal class Program {
 		// Time to cleanup
 		swapchain.Dispose();
 		device.Dispose();
-		Vk.DestroySurfaceKHR(inst, surface, inst.AllocationCallbacks);
+		inst.DestroySurface(surface);
 		inst.Dispose();
 		GLFW.DestroyWindow(window);
 		GLFW.Terminate();

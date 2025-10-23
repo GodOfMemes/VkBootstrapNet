@@ -2,13 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Fuchsium.VkBootstrapNet\Fuchsium.VkBootstrapNet.csproj" />
+    <ProjectReference Include="..\..\VkBootstrapNet\VkBootstrapNet.csproj" />
   </ItemGroup>
 
 </Project>
