@@ -200,12 +200,12 @@ internal static unsafe class Detail {
 		}
 		return uint.MaxValue;
 	}
-	public static uint GetPresentQueueIndex(VkInstanceApi instanceApi,PhysicalDevice physDevice, VkSurfaceKHR surface, VkQueueFamilyProperties[] families) 
+	public static uint GetPresentQueueIndex(VkInstanceApi instanceApi,VkPhysicalDevice physDevice, VkSurfaceKHR surface, VkQueueFamilyProperties[] families) 
 	{
 		for(int i = 0; i < families.Length; i++) {
 			VkBool32 presentSupport = false;
 			if(surface.IsNotNull) {
-				VkResult res = instanceApi.vkGetPhysicalDeviceSurfaceSupportKHR(physDevice.VkPhysicalDevice, (uint)i, surface, &presentSupport);
+				VkResult res = instanceApi.vkGetPhysicalDeviceSurfaceSupportKHR(physDevice, (uint)i, surface, &presentSupport);
 				if(res != VkResult.Success) {
 					return uint.MaxValue;
 				}

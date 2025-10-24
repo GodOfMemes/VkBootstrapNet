@@ -35,22 +35,25 @@ public unsafe ref struct SwapchainBuilder {
 		_info.GraphicsQueueIndex = graphics.Value;
 		_info.PresentQueueIndex = present.Value;
 	}
-	/*public unsafe SwapchainBuilder(VkPhysicalDevice physicalDevice, in VkDevice device, in VkSurfaceKHR surface, uint graphicsQueueIndex, uint presentQueueIndex) {
+	
+	public unsafe SwapchainBuilder(PhysicalDevice physicalDevice, in Device device, in VkSurfaceKHR surface, uint graphicsQueueIndex, uint presentQueueIndex) {
 		_info.PhysicalDevice = physicalDevice;
 		_info.Device = device;
 		_info.Surface = surface;
 		_info.GraphicsQueueIndex = graphicsQueueIndex;
 		_info.PresentQueueIndex = presentQueueIndex;
-		if(graphicsQueueIndex == uint.MaxValue || presentQueueIndex == uint.MaxValue) {
-			var queueFamilies = Detail.GetVectorNoError<VkQueueFamilyProperties>((p1, p2) => vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, (uint*)p1, (VkQueueFamilyProperties*)p2));
+		if(graphicsQueueIndex == uint.MaxValue || presentQueueIndex == uint.MaxValue)
+		{
+			VkInstanceApi api = device.Instance;
+			var queueFamilies = Detail.GetVectorNoError<VkQueueFamilyProperties>((p1, p2) => api.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, (uint*)p1, (VkQueueFamilyProperties*)p2));
 			if(graphicsQueueIndex == uint.MaxValue) {
 				_info.GraphicsQueueIndex = Detail.GetFirstQueueIndex(queueFamilies, VkQueueFlags.Graphics);
 			}
 			if(presentQueueIndex == uint.MaxValue) {
-				_info.PresentQueueIndex = Detail.GetPresentQueueIndex(physicalDevice, surface, queueFamilies);
+				_info.PresentQueueIndex = Detail.GetPresentQueueIndex(device.Instance, physicalDevice, surface, queueFamilies);
 			}
 		}
-	}*/
+	}
 
 	public Result<Swapchain> Build() {
 		if(_info.Surface.IsNull) {
